@@ -1,9 +1,20 @@
-[package]
-name = "nvme"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+resolver = "2"
+members = [
+ "nvme-sys",
+ "nvme-sys/header-check",
+ "nvme"
+]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+default-members = [
+ "nvme-sys",
+ "nvme"
+]
 
-[dependencies]
+exclude = [
+ "nvme-sys/header-check"
+]
+
+[workspace.dependencies]
+nvme-sys = { path = "nvme-sys" }
 thiserror = "1.0.51"

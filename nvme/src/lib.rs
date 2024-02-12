@@ -2,10 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-
 use std::ffi::CStr;
 
 use error::{InternalError, LibraryError};
@@ -14,13 +10,12 @@ use thiserror::Error;
 pub mod controller;
 pub mod controller_info;
 mod error;
-mod ffi;
 mod lba;
 pub mod namespace;
 mod util;
 mod wdc;
 
-use ffi::nvme::*;
+use nvme_sys::nvme::*;
 
 use crate::controller::ControllerDiscovery;
 

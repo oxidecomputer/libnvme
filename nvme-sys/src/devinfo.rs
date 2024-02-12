@@ -4,5 +4,4 @@
 
 use super::opaque_type;
 
-opaque_type!(di_node);
-pub(crate) type di_node_t = *mut di_node;
+opaque_type!(di_node, di_node_t);

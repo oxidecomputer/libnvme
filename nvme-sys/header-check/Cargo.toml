@@ -1,0 +1,17 @@
+[package]
+name = "header-check"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libc = "0.2.153"
+nvme-sys = { path = "../" }
+
+[build-dependencies]
+nvme-sys = { path = "../" }
+ctest2 = "0.4.7"
+
+[[test]]
+name = "main"
+path = "test/main.rs"
+harness = false
