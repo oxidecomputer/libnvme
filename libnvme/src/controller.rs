@@ -12,7 +12,7 @@ use crate::{
     Nvme, NvmeError,
 };
 
-use nvme_sys::nvme::*;
+use libnvme_sys::nvme::*;
 
 enum ControllerLockLevel {
     Read = 1,

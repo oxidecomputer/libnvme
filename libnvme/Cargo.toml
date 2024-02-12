@@ -1,9 +1,9 @@
 [package]
-name = "nvme"
+name = "libnvme"
 version = "0.1.0"
 license = "MPL-2.0"
 edition = "2021"
 
 [dependencies]
-nvme-sys.workspace = true
+libnvme-sys.workspace = true
 thiserror.workspace = true

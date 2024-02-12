@@ -121,7 +121,7 @@ version = "0.1.0"
 dependencies = [
  "ctest2",
  "libc",
- "nvme-sys",
+ "libnvme-sys",
 ]
 
 [[package]]
@@ -135,6 +135,18 @@ name = "libc"
 version = "0.2.153"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c198f91728a82281a64e1f4f9eeb25d82cb32a5de251c6bd1b5154d63a8e7bd"
+
+[[package]]
+name = "libnvme"
+version = "0.1.0"
+dependencies = [
+ "libnvme-sys",
+ "thiserror",
+]
+
+[[package]]
+name = "libnvme-sys"
+version = "0.0.0"
 
 [[package]]
 name = "libredox"
@@ -152,18 +164,6 @@ name = "log"
 version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
-
-[[package]]
-name = "nvme"
-version = "0.1.0"
-dependencies = [
- "nvme-sys",
- "thiserror",
-]
-
-[[package]]
-name = "nvme-sys"
-version = "0.0.0"
 
 [[package]]
 name = "proc-macro2"

@@ -7,8 +7,8 @@
 // types so there is nothing to check for currently.
 #![allow(unused_macros)]
 
-extern crate nvme_sys;
+extern crate libnvme_sys;
 
-use nvme_sys::nvme::*;
+use libnvme_sys::nvme::*;
 
 include!(concat!(env!("OUT_DIR"), "/main.rs"));

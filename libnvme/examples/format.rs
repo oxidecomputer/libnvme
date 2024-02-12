@@ -1,7 +1,7 @@
-use nvme::namespace::NamespaceDiscoveryLevel;
+use libnvme::namespace::NamespaceDiscoveryLevel;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let nvme = nvme::Nvme::new()?;
+    let nvme = libnvme::Nvme::new()?;
     let discovery = nvme.controller_discovery()?;
 
     for controller in discovery.into_iter() {

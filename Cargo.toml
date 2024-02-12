@@ -1,20 +1,20 @@
 [workspace]
 resolver = "2"
 members = [
- "nvme-sys",
- "nvme-sys/header-check",
- "nvme"
+ "libnvme-sys",
+ "libnvme-sys/header-check",
+ "libnvme"
 ]
 
 default-members = [
- "nvme-sys",
- "nvme"
+ "libnvme-sys",
+ "libnvme"
 ]
 
 exclude = [
- "nvme-sys/header-check"
+ "libnvme-sys/header-check"
 ]
 
 [workspace.dependencies]
-nvme-sys = { path = "nvme-sys" }
+libnvme-sys = { path = "libnvme-sys" }
 thiserror = "1.0.51"

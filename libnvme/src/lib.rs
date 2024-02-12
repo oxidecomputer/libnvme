@@ -15,7 +15,7 @@ pub mod namespace;
 mod util;
 mod wdc;
 
-use nvme_sys::nvme::*;
+use libnvme_sys::nvme::*;
 
 use crate::controller::ControllerDiscovery;
 

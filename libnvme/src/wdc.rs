@@ -4,7 +4,7 @@
 
 use crate::{controller::LockedController, error::LibraryError, NvmeError};
 
-use nvme_sys::nvme::{nvme_wdc_resize_get, nvme_wdc_resize_set};
+use libnvme_sys::nvme::{nvme_wdc_resize_get, nvme_wdc_resize_set};
 
 impl LockedController {
     pub fn wdc_resize_set(&self, size: u32) -> Result<(), NvmeError> {

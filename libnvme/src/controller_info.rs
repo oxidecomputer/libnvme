@@ -4,7 +4,7 @@
 
 use std::{borrow::Cow, ffi::CStr, marker::PhantomData};
 
-use nvme_sys::nvme::*;
+use libnvme_sys::nvme::*;
 use thiserror::Error;
 
 use crate::{

@@ -4,7 +4,7 @@
 
 use crate::{controller::Controller, error::LibraryError, NvmeError};
 
-use nvme_sys::nvme::*;
+use libnvme_sys::nvme::*;
 
 pub enum NamespaceDiscoveryLevel {
     All,

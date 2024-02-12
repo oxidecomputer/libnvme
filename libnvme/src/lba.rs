@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 
 use crate::{controller_info::ControllerInfo, util::FfiPtr};
 
-use nvme_sys::nvme::*;
+use libnvme_sys::nvme::*;
 
 pub enum Performance {
     Best,

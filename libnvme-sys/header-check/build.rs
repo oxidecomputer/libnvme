@@ -4,7 +4,7 @@
 
 #![deny(warnings)]
 
-extern crate nvme_sys;
+extern crate libnvme_sys;
 
 fn main() {
     let mut cfg = ctest2::TestGenerator::new();

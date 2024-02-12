@@ -5,10 +5,10 @@ edition = "2021"
 
 [dependencies]
 libc = "0.2.153"
-nvme-sys = { path = "../" }
+libnvme-sys = { path = "../" }
 
 [build-dependencies]
-nvme-sys = { path = "../" }
+libnvme-sys = { path = "../" }
 ctest2 = "0.4.7"
 
 [[test]]
