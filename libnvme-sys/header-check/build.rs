@@ -4,12 +4,28 @@
 
 #![deny(warnings)]
 
+use std::{env, path::PathBuf};
+
 extern crate libnvme_sys;
 
 fn main() {
     let mut cfg = ctest2::TestGenerator::new();
 
+    // We cannot proceed without a path to the source
+    let gate_dir = match env::var("GATE_SRC").map(PathBuf::try_from) {
+        Ok(Ok(dir)) => dir,
+        _ => {
+            eprintln!("Must specify path to illumos-gate sources with GATE_SRC env var");
+            std::process::exit(1);
+        }
+    };
+
+    let include_paths = ["usr/src/uts/common"];
     cfg.include("/usr/include");
+    for p in include_paths {
+        cfg.include(gate_dir.join(p));
+    }
+
     cfg.header("libnvme.h");
 
     cfg.skip_struct(|name| match name {
