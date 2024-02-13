@@ -20,6 +20,7 @@ fn main() {
         }
     };
 
+    // We need access to sys/nvme.h which is not shipped in /usr/include
     let include_paths = ["usr/src/uts/common"];
     cfg.include("/usr/include");
     for p in include_paths {
