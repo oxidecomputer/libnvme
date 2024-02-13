@@ -101,6 +101,9 @@ pub const NVME_ERR_DETACH_KERN: nvme_err_t = 90;
 pub const NVME_ERR_ATTACH_KERN: nvme_err_t = 91;
 pub const NVME_ERR_ATTACH_UNSUP_KERN: nvme_err_t = 92;
 pub const NVME_ERR_NS_BLKDEV_ATTACH: nvme_err_t = 93;
+pub const NVME_ERR_NO_KERN_MEM: nvme_err_t = 94;
+pub const NVME_ERR_CTRL_DEAD: nvme_err_t = 95;
+pub const NVME_ERR_CTRL_GONE: nvme_err_t = 96;
 pub type nvme_err_t = c_uint;
 
 pub const NVME_INFO_ERR_OK: nvme_info_err_t = 0;

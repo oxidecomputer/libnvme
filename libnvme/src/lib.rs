@@ -209,6 +209,12 @@ pub enum NvmeError {
     AttachUnsupKern(InternalError),
     #[error(transparent)]
     NsBlkdevAttach(InternalError),
+    #[error(transparent)]
+    NoKernMem(InternalError),
+    #[error(transparent)]
+    CtrlDead(InternalError),
+    #[error(transparent)]
+    CtrlGone(InternalError),
 }
 
 impl NvmeError {
@@ -352,6 +358,9 @@ impl NvmeError {
             NVME_ERR_ATTACH_KERN => NvmeError::AttachKern(internal),
             NVME_ERR_ATTACH_UNSUP_KERN => NvmeError::AttachUnsupKern(internal),
             NVME_ERR_NS_BLKDEV_ATTACH => NvmeError::NsBlkdevAttach(internal),
+            NVME_ERR_NO_KERN_MEM => NvmeError::NoKernMem(internal),
+            NVME_ERR_CTRL_DEAD => NvmeError::CtrlDead(internal),
+            NVME_ERR_CTRL_GONE => NvmeError::CtrlGone(internal),
             // TODO map this to an error type so we don't crash someones program
             _ => unreachable!("Unknown Error"),
         }
