@@ -2,17 +2,7 @@
 resolver = "2"
 members = [
  "libnvme-sys",
- "libnvme-sys/header-check",
  "libnvme"
-]
-
-default-members = [
- "libnvme-sys",
- "libnvme"
-]
-
-exclude = [
- "libnvme-sys/header-check"
 ]
 
 [workspace.dependencies]

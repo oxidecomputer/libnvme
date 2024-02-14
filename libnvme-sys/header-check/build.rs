@@ -9,6 +9,10 @@ use std::{env, path::PathBuf};
 extern crate libnvme_sys;
 
 fn main() {
+    // This is a bit of a hack, but we want this to always rerun as the users
+    // GATE_SRC checkout may have changed.
+    println!("cargo:rerun-if-changed=./target");
+
     let mut cfg = ctest2::TestGenerator::new();
 
     // We cannot proceed without a path to the source
