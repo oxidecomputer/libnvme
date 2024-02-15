@@ -8,6 +8,7 @@ use crate::{controller_info::ControllerInfo, util::FfiPtr};
 
 use libnvme_sys::nvme::*;
 
+#[derive(Debug)]
 pub enum Performance {
     Best,
     Better,
@@ -30,7 +31,8 @@ impl From<u32> for Performance {
 
 pub struct LbaFormat<'info> {
     lba: *const nvme_nvm_lba_fmt_t,
-    _phantom: PhantomData<&'info ControllerInfo<'info>>,
+    // This is tied to ControllerInfo or NamespaceInfo
+    _phantom: PhantomData<&'info ()>,
 }
 
 impl<'info> LbaFormat<'info> {

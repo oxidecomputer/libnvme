@@ -15,7 +15,7 @@ use crate::{
 };
 
 #[derive(Debug, Error)]
-pub enum ControllerInfoError {
+pub enum NvmeInfoError {
     #[error(transparent)]
     Ok(InternalError),
     #[error(transparent)]
@@ -38,31 +38,22 @@ pub enum ControllerInfoError {
     NsNoBlkdev(InternalError),
 }
 
-impl ControllerInfoError {
-    fn from_raw_with_internal_error(raw: u32, internal: InternalError) -> Self {
+impl NvmeInfoError {
+    pub(crate) fn from_raw_with_internal_error(
+        raw: u32,
+        internal: InternalError,
+    ) -> Self {
         match raw {
-            NVME_INFO_ERR_OK => ControllerInfoError::Ok(internal),
-            NVME_INFO_ERR_TRANSPORT => ControllerInfoError::Transport(internal),
-            NVME_INFO_ERR_VERSION => ControllerInfoError::Version(internal),
-            NVME_INFO_ERR_MISSING_CAP => {
-                ControllerInfoError::MissingCap(internal)
-            }
-            NVME_INFO_ERR_BAD_LBA_FMT => {
-                ControllerInfoError::BadLbaFmt(internal)
-            }
-            NVME_INFO_ERR_PERSIST_NVL => {
-                ControllerInfoError::PersistNvl(internal)
-            }
-            NVME_INFO_ERR_BAD_FMT => ControllerInfoError::BadFmt(internal),
-            NVME_INFO_ERR_BAD_FMT_DATA => {
-                ControllerInfoError::BadFmtData(internal)
-            }
-            NVME_INFO_ERR_NS_INACTIVE => {
-                ControllerInfoError::NsInactive(internal)
-            }
-            NVME_INFO_ERR_NS_NO_BLKDEV => {
-                ControllerInfoError::NsNoBlkdev(internal)
-            }
+            NVME_INFO_ERR_OK => NvmeInfoError::Ok(internal),
+            NVME_INFO_ERR_TRANSPORT => NvmeInfoError::Transport(internal),
+            NVME_INFO_ERR_VERSION => NvmeInfoError::Version(internal),
+            NVME_INFO_ERR_MISSING_CAP => NvmeInfoError::MissingCap(internal),
+            NVME_INFO_ERR_BAD_LBA_FMT => NvmeInfoError::BadLbaFmt(internal),
+            NVME_INFO_ERR_PERSIST_NVL => NvmeInfoError::PersistNvl(internal),
+            NVME_INFO_ERR_BAD_FMT => NvmeInfoError::BadFmt(internal),
+            NVME_INFO_ERR_BAD_FMT_DATA => NvmeInfoError::BadFmtData(internal),
+            NVME_INFO_ERR_NS_INACTIVE => NvmeInfoError::NsInactive(internal),
+            NVME_INFO_ERR_NS_NO_BLKDEV => NvmeInfoError::NsNoBlkdev(internal),
             // TODO map this to an error type so we don't crash someones program
             _ => unreachable!("Unknown Error"),
         }
@@ -113,7 +104,7 @@ impl<'ctrl> ControllerInfo<'ctrl> {
         unsafe { nvme_ctrl_info_nns(self.ctrl_info) }
     }
 
-    pub fn pci_vid(&self) -> Result<u16, ControllerInfoError> {
+    pub fn pci_vid(&self) -> Result<u16, NvmeInfoError> {
         let mut vid = 0;
         match unsafe { nvme_ctrl_info_pci_vid(self.ctrl_info, &mut vid) } {
             true => Ok(vid),
@@ -125,10 +116,7 @@ impl<'ctrl> ControllerInfo<'ctrl> {
         unsafe { nvme_ctrl_info_nformats(self.ctrl_info) }
     }
 
-    fn nvm_lba_fmt(
-        &self,
-        index: u32,
-    ) -> Result<LbaFormat<'_>, ControllerInfoError> {
+    fn nvm_lba_fmt(&self, index: u32) -> Result<LbaFormat<'_>, NvmeInfoError> {
         let mut lba: *const nvme_nvm_lba_fmt_t = std::ptr::null_mut();
         if !unsafe { nvme_ctrl_info_format(self.ctrl_info, index, &mut lba) } {
             return Err(self.fatal_context(format!(
@@ -138,15 +126,13 @@ impl<'ctrl> ControllerInfo<'ctrl> {
         Ok(unsafe { LbaFormat::from_raw(lba) })
     }
 
-    pub fn lba_formats(
-        &self,
-    ) -> Vec<Result<LbaFormat<'_>, ControllerInfoError>> {
+    pub fn lba_formats(&self) -> Vec<Result<LbaFormat<'_>, NvmeInfoError>> {
         (0..self.nformats()).map(|i| self.nvm_lba_fmt(i)).collect()
     }
 }
 
 impl<'ctrl> LibraryError for ControllerInfo<'ctrl> {
-    type Error = ControllerInfoError;
+    type Error = NvmeInfoError;
 
     fn get_errmsg(&self) -> String {
         let errmsg = unsafe { nvme_ctrl_info_errmsg(self.ctrl_info) };
@@ -158,7 +144,7 @@ impl<'ctrl> LibraryError for ControllerInfo<'ctrl> {
     }
 
     fn to_error(&self, internal: InternalError) -> Self::Error {
-        ControllerInfoError::from_raw_with_internal_error(
+        NvmeInfoError::from_raw_with_internal_error(
             unsafe { nvme_ctrl_info_err(self.ctrl_info) },
             internal,
         )
