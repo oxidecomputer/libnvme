@@ -1,9 +1,10 @@
-[package]
-name = "nvme"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+resolver = "2"
+members = [
+ "libnvme-sys",
+ "libnvme"
+]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
+[workspace.dependencies]
+libnvme-sys = { path = "libnvme-sys" }
 thiserror = "1.0.51"

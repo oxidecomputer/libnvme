@@ -1,7 +1,11 @@
-use nvme::namespace::NamespaceDiscoveryLevel;
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+use libnvme::namespace::NamespaceDiscoveryLevel;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let nvme = nvme::Nvme::new()?;
+    let nvme = libnvme::Nvme::new()?;
     let discovery = nvme.controller_discovery()?;
 
     for controller in discovery.into_iter() {

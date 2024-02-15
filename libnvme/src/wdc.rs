@@ -2,12 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::{
-    controller::LockedController,
-    error::LibraryError,
-    ffi::nvme::{nvme_wdc_resize_get, nvme_wdc_resize_set},
-    NvmeError,
-};
+use crate::{controller::LockedController, error::LibraryError, NvmeError};
+
+use libnvme_sys::nvme::{nvme_wdc_resize_get, nvme_wdc_resize_set};
 
 impl LockedController {
     pub fn wdc_resize_set(&self, size: u32) -> Result<(), NvmeError> {

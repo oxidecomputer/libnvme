@@ -7,11 +7,12 @@ use std::{ffi::CStr, ops::Deref};
 use crate::{
     controller_info::ControllerInfo,
     error::LibraryError,
-    ffi::nvme::*,
     namespace::{NamespaceDiscovery, NamespaceDiscoveryLevel},
     util::FfiPtr,
     Nvme, NvmeError,
 };
+
+use libnvme_sys::nvme::*;
 
 enum ControllerLockLevel {
     Read = 1,

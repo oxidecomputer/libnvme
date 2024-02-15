@@ -4,12 +4,12 @@
 
 use std::{borrow::Cow, ffi::CStr, marker::PhantomData};
 
+use libnvme_sys::nvme::*;
 use thiserror::Error;
 
 use crate::{
     controller::Controller,
     error::{InternalError, LibraryError},
-    ffi::nvme::*,
     lba::LbaFormat,
     util::FfiPtr,
 };

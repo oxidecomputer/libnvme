@@ -2,10 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-
 use std::ffi::CStr;
 
 use error::{InternalError, LibraryError};
@@ -14,13 +10,12 @@ use thiserror::Error;
 pub mod controller;
 pub mod controller_info;
 mod error;
-mod ffi;
 mod lba;
 pub mod namespace;
 mod util;
 mod wdc;
 
-use ffi::nvme::*;
+use libnvme_sys::nvme::*;
 
 use crate::controller::ControllerDiscovery;
 
@@ -214,6 +209,12 @@ pub enum NvmeError {
     AttachUnsupKern(InternalError),
     #[error(transparent)]
     NsBlkdevAttach(InternalError),
+    #[error(transparent)]
+    NoKernMem(InternalError),
+    #[error(transparent)]
+    CtrlDead(InternalError),
+    #[error(transparent)]
+    CtrlGone(InternalError),
 }
 
 impl NvmeError {
@@ -357,6 +358,9 @@ impl NvmeError {
             NVME_ERR_ATTACH_KERN => NvmeError::AttachKern(internal),
             NVME_ERR_ATTACH_UNSUP_KERN => NvmeError::AttachUnsupKern(internal),
             NVME_ERR_NS_BLKDEV_ATTACH => NvmeError::NsBlkdevAttach(internal),
+            NVME_ERR_NO_KERN_MEM => NvmeError::NoKernMem(internal),
+            NVME_ERR_CTRL_DEAD => NvmeError::CtrlDead(internal),
+            NVME_ERR_CTRL_GONE => NvmeError::CtrlGone(internal),
             // TODO map this to an error type so we don't crash someones program
             _ => unreachable!("Unknown Error"),
         }
