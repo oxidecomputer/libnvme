@@ -141,6 +141,7 @@ opaque_type!(nvme_ctrl_info, nvme_ctrl_info_t);
 opaque_type!(nvme_ns_iter, nvme_ns_iter_t);
 opaque_type!(nvme_ns_disc, nvme_ns_disc_t);
 opaque_type!(nvme_ns, nvme_ns_t);
+opaque_type!(nvme_ns_info, nvme_ns_info_t);
 opaque_type!(nvme_nvm_lba_fmt, nvme_nvm_lba_fmt_t);
 opaque_type!(nvme_format_req, nvme_format_req_t);
 
@@ -231,6 +232,20 @@ extern "C" {
         arg2: *mut *mut nvme_ns_t,
     ) -> bool;
     pub fn nvme_ns_fini(arg1: *mut nvme_ns_t);
+
+    // NVMe Namespace information.
+    pub fn nvme_ns_info_snap(
+        arg1: *mut nvme_ns_t,
+        arg2: *mut *mut nvme_ns_info_t,
+    ) -> bool;
+    pub fn nvme_ns_info_free(arg1: *mut nvme_ns_info_t);
+    pub fn nvme_ns_info_err(arg1: *mut nvme_ns_info_t) -> nvme_info_err_t;
+    pub fn nvme_ns_info_errmsg(arg1: *mut nvme_ns_info_t) -> *const c_char;
+    pub fn nvme_ns_info_syserr(arg1: *mut nvme_ns_info_t) -> c_int;
+    pub fn nvme_ns_info_curformat(
+        arg1: *mut nvme_ns_info_t,
+        arg2: *mut *const nvme_nvm_lba_fmt,
+    ) -> bool;
 
     // Controller Locking.
     pub fn nvme_ctrl_lock(
