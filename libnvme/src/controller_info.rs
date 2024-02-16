@@ -61,7 +61,7 @@ impl NvmeInfoError {
 }
 pub struct ControllerInfo<'ctrl> {
     ctrl_info: *mut nvme_ctrl_info_t,
-    _phantom: PhantomData<&'ctrl Controller>,
+    _phantom: PhantomData<&'ctrl Controller<'ctrl>>,
 }
 
 impl<'ctrl> Drop for ControllerInfo<'ctrl> {

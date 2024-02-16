@@ -4,7 +4,7 @@
 
 use std::marker::PhantomData;
 
-use crate::{controller_info::ControllerInfo, util::FfiPtr};
+use crate::util::FfiPtr;
 
 use libnvme_sys::nvme::*;
 

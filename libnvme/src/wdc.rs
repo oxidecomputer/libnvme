@@ -6,11 +6,11 @@ use crate::{controller::LockedController, error::LibraryError, NvmeError};
 
 use libnvme_sys::nvme::{nvme_wdc_resize_get, nvme_wdc_resize_set};
 
-impl LockedController {
+impl<'handle> LockedController<'handle> {
     pub fn wdc_resize_set(&self, size: u32) -> Result<(), NvmeError> {
         let controller =
             self.controller.as_ref().expect("controller is locked");
-        match unsafe { nvme_wdc_resize_set(controller.0, size) } {
+        match unsafe { nvme_wdc_resize_set(controller.inner, size) } {
             true => Ok(()),
             false => {
                 Err(controller.fatal_context("failed to resize wdc device"))
@@ -22,7 +22,7 @@ impl LockedController {
         let mut size = 0;
         let controller =
             self.controller.as_ref().expect("controller is locked");
-        match unsafe { nvme_wdc_resize_get(controller.0, &mut size) } {
+        match unsafe { nvme_wdc_resize_get(controller.inner, &mut size) } {
             true => Ok(size),
             false => {
                 Err(controller

@@ -36,7 +36,7 @@ impl NamespaceDiscoveryLevel {
 }
 
 pub struct NamespaceDiscovery<'a> {
-    controller: &'a Controller,
+    controller: &'a Controller<'a>,
     iter: *mut nvme_ns_iter_t,
 }
 
@@ -54,7 +54,7 @@ impl<'a> NamespaceDiscovery<'a> {
         let mut iter = std::ptr::null_mut();
         match unsafe {
             nvme_ns_discover_init(
-                controller.0,
+                controller.inner,
                 level.as_ns_disc_level(),
                 &mut iter,
             )
@@ -73,8 +73,9 @@ impl<'a> NamespaceDiscovery<'a> {
             NVME_ITER_VALID => {
                 let nsid = unsafe { nvme_ns_disc_nsid(nvme_ns_disc) };
                 let mut ns: *mut nvme_ns_t = std::ptr::null_mut();
-                match unsafe { nvme_ns_init(self.controller.0, nsid, &mut ns) }
-                {
+                match unsafe {
+                    nvme_ns_init(self.controller.inner, nsid, &mut ns)
+                } {
                     true => Ok(Some(Namespace {
                         inner: ns,
                         controller: self.controller,
@@ -105,7 +106,7 @@ impl<'a> Iterator for NamespaceDiscovery<'a> {
 
 pub struct Namespace<'a> {
     inner: *mut nvme_ns_t,
-    controller: &'a Controller,
+    controller: &'a Controller<'a>,
 }
 
 impl<'a> Drop for Namespace<'a> {
