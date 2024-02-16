@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::{ffi::CStr, marker::PhantomData, ops::Deref};
+use std::{ffi::CStr, ops::Deref};
 
 use crate::{
     controller_info::ControllerInfo,
@@ -32,7 +32,7 @@ pub enum TryLockResult<L, T, E> {
 
 pub struct Controller<'handle> {
     pub(crate) inner: *mut nvme_ctrl_t,
-    _phantom: PhantomData<&'handle ()>,
+    _nvme: &'handle Nvme,
 }
 
 impl<'handle> Controller<'handle> {
@@ -160,7 +160,7 @@ impl<'a> ControllerDiscovery<'a> {
                 } {
                     true => Ok(Some(Controller {
                         inner: nvme_ctrl,
-                        _phantom: PhantomData,
+                        _nvme: self.nvme,
                     })),
                     false => Err(self
                         .nvme
