@@ -36,7 +36,7 @@ pub struct Controller<'handle> {
 }
 
 impl<'handle> Controller<'handle> {
-    pub fn get_info(&self) -> Result<ControllerInfo, NvmeError> {
+    pub fn get_info(&self) -> Result<ControllerInfo<'_>, NvmeError> {
         let mut ctrl_info: *mut nvme_ctrl_info_t = std::ptr::null_mut();
         match { unsafe { nvme_ctrl_info_snap(self.inner, &mut ctrl_info) } } {
             true => Ok(unsafe { ControllerInfo::from_raw(ctrl_info) }),
@@ -113,7 +113,7 @@ impl<'handle> Controller<'handle> {
     pub fn namespace_discovery(
         &self,
         level: NamespaceDiscoveryLevel,
-    ) -> Result<NamespaceDiscovery, NvmeError> {
+    ) -> Result<NamespaceDiscovery<'_>, NvmeError> {
         NamespaceDiscovery::new(self, level)
     }
 }
@@ -223,7 +223,9 @@ impl<'handle> LockedController<'handle> {
         self.controller.take().expect("controller invariant violated")
     }
 
-    pub fn format_request(&self) -> Result<FormatRequestBuilder, NvmeError> {
+    pub fn format_request(
+        &self,
+    ) -> Result<FormatRequestBuilder<'_>, NvmeError> {
         let controller =
             self.controller.as_ref().expect("controller is locked");
         let mut req = std::ptr::null_mut();

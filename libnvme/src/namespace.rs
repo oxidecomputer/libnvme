@@ -48,7 +48,7 @@ impl<'a> Drop for NamespaceDiscovery<'a> {
 
 impl<'a> NamespaceDiscovery<'a> {
     pub(crate) fn new(
-        controller: &'a Controller,
+        controller: &'a Controller<'_>,
         level: NamespaceDiscoveryLevel,
     ) -> Result<Self, NvmeError> {
         let mut iter = std::ptr::null_mut();
@@ -154,7 +154,7 @@ impl Drop for NamespaceInfo {
 }
 
 impl NamespaceInfo {
-    pub fn current_format(&self) -> Result<LbaFormat, NvmeInfoError> {
+    pub fn current_format(&self) -> Result<LbaFormat<'_>, NvmeInfoError> {
         let mut lba: *const nvme_nvm_lba_fmt_t = std::ptr::null_mut();
         match unsafe { nvme_ns_info_curformat(self.0, &mut lba) } {
             true => Ok(unsafe { LbaFormat::from_raw(lba) }),

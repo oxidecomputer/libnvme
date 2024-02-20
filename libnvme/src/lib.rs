@@ -2,6 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+#![deny(elided_lifetimes_in_paths)]
+
 use std::ffi::CStr;
 
 use error::{InternalError, LibraryError};
@@ -387,7 +389,7 @@ impl Nvme {
 
     pub fn controller_discovery(
         &self,
-    ) -> Result<ControllerDiscovery, NvmeError> {
+    ) -> Result<ControllerDiscovery<'_>, NvmeError> {
         ControllerDiscovery::new(self)
     }
 }
