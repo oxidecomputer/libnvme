@@ -6,7 +6,7 @@ use std::ffi::CStr;
 
 use crate::{
     controller::Controller,
-    controller_info::NvmeInfoError,
+    controller_info::{NvmeInfoError, NvmeInfoErrorCode},
     error::{InternalError, LibraryError},
     lba::LbaFormat,
     util::FfiPtr,
@@ -52,17 +52,18 @@ impl<'a> NamespaceDiscovery<'a> {
         level: NamespaceDiscoveryLevel,
     ) -> Result<Self, NvmeError> {
         let mut iter = std::ptr::null_mut();
-        match unsafe {
-            nvme_ns_discover_init(
-                controller.inner,
-                level.as_ns_disc_level(),
-                &mut iter,
+        controller
+            .check_result(
+                unsafe {
+                    nvme_ns_discover_init(
+                        controller.inner,
+                        level.as_ns_disc_level(),
+                        &mut iter,
+                    )
+                },
+                || "failed to init nvme namespace discovery",
             )
-        } {
-            true => Ok(NamespaceDiscovery { controller, iter }),
-            false => Err(controller
-                .fatal_context("failed to init nvme namespace discovery")),
-        }
+            .map(|_| NamespaceDiscovery { controller, iter })
     }
 
     fn internal_step(&self) -> Result<Option<Namespace<'a>>, NvmeError> {
@@ -73,17 +74,19 @@ impl<'a> NamespaceDiscovery<'a> {
             NVME_ITER_VALID => {
                 let nsid = unsafe { nvme_ns_disc_nsid(nvme_ns_disc) };
                 let mut ns: *mut nvme_ns_t = std::ptr::null_mut();
-                match unsafe {
-                    nvme_ns_init(self.controller.inner, nsid, &mut ns)
-                } {
-                    true => Ok(Some(Namespace {
-                        inner: ns,
-                        controller: self.controller,
-                    })),
-                    false => Err(self
-                        .controller
-                        .fatal_context("failed to init nvme namespace")),
-                }
+                self.controller
+                    .check_result(
+                        unsafe {
+                            nvme_ns_init(self.controller.inner, nsid, &mut ns)
+                        },
+                        || "failed to init nvme namespace",
+                    )
+                    .map(|_| {
+                        Some(Namespace {
+                            inner: ns,
+                            controller: self.controller,
+                        })
+                    })
             }
             NVME_ITER_DONE => Ok(None),
             NVME_ITER_ERROR => Err(self
@@ -118,30 +121,26 @@ impl<'a> Drop for Namespace<'a> {
 impl<'a> Namespace<'a> {
     pub fn get_info(&self) -> Result<NamespaceInfo, NvmeError> {
         let mut nvme_ns_info: *mut nvme_ns_info_t = std::ptr::null_mut();
-        match unsafe { nvme_ns_info_snap(self.inner, &mut nvme_ns_info) } {
-            true => Ok(unsafe { NamespaceInfo::from_raw(nvme_ns_info) }),
-            false => Err(self
-                .controller
-                .fatal_context("failed to get ns info snapshot")),
-        }
+        self.controller
+            .check_result(
+                unsafe { nvme_ns_info_snap(self.inner, &mut nvme_ns_info) },
+                || "failed to get ns info snapshot",
+            )
+            .map(|_| unsafe { NamespaceInfo::from_raw(nvme_ns_info) })
     }
 
     pub fn blkdev_attach(&self) -> Result<(), NvmeError> {
-        match unsafe { nvme_ns_bd_attach(self.inner) } {
-            true => Ok(()),
-            false => Err(self
-                .controller
-                .fatal_context("failed to attach blkdev to namespace")),
-        }
+        self.controller
+            .check_result(unsafe { nvme_ns_bd_attach(self.inner) }, || {
+                "failed to attach blkdev to namespace"
+            })
     }
 
     pub fn blkdev_detach(&self) -> Result<(), NvmeError> {
-        match unsafe { nvme_ns_bd_detach(self.inner) } {
-            true => Ok(()),
-            false => Err(self
-                .controller
-                .fatal_context("failed to detach blkdev to namespace")),
-        }
+        self.controller
+            .check_result(unsafe { nvme_ns_bd_detach(self.inner) }, || {
+                "failed to detach blkdev to namespace"
+            })
     }
 }
 
@@ -156,12 +155,11 @@ impl Drop for NamespaceInfo {
 impl NamespaceInfo {
     pub fn current_format(&self) -> Result<LbaFormat<'_>, NvmeInfoError> {
         let mut lba: *const nvme_nvm_lba_fmt_t = std::ptr::null_mut();
-        match unsafe { nvme_ns_info_curformat(self.0, &mut lba) } {
-            true => Ok(unsafe { LbaFormat::from_raw(lba) }),
-            false => Err(self.fatal_context(
-                "failed to get current format of NVMe namespace",
-            )),
-        }
+        self.check_result(
+            unsafe { nvme_ns_info_curformat(self.0, &mut lba) },
+            || "failed to get current format of NVMe namespace",
+        )
+        .map(|_| unsafe { LbaFormat::from_raw(lba) })
     }
 }
 
@@ -177,9 +175,10 @@ impl LibraryError for NamespaceInfo {
         unsafe { nvme_ns_info_syserr(self.0) }
     }
 
-    fn to_error(&self, internal: InternalError) -> Self::Error {
-        NvmeInfoError::from_raw_with_internal_error(
-            unsafe { nvme_ns_info_err(self.0) },
+    fn current_error(&self, internal: InternalError) -> Self::Error {
+        let raw = unsafe { nvme_ns_info_err(self.0) };
+        NvmeInfoError::from_code_and_error(
+            NvmeInfoErrorCode::from_raw(raw),
             internal,
         )
     }

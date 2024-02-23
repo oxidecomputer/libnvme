@@ -9,7 +9,7 @@ use crate::{
     error::LibraryError,
     namespace::{NamespaceDiscovery, NamespaceDiscoveryLevel},
     util::FfiPtr,
-    Nvme, NvmeError,
+    Nvme, NvmeError, NvmeErrorCode,
 };
 
 use libnvme_sys::nvme::*;
@@ -38,12 +38,11 @@ pub struct Controller<'handle> {
 impl<'handle> Controller<'handle> {
     pub fn get_info(&self) -> Result<ControllerInfo<'_>, NvmeError> {
         let mut ctrl_info: *mut nvme_ctrl_info_t = std::ptr::null_mut();
-        match { unsafe { nvme_ctrl_info_snap(self.inner, &mut ctrl_info) } } {
-            true => Ok(unsafe { ControllerInfo::from_raw(ctrl_info) }),
-            false => {
-                Err(self.fatal_context("failed to get controller snapshot"))
-            }
-        }
+        self.check_result(
+            unsafe { nvme_ctrl_info_snap(self.inner, &mut ctrl_info) },
+            || "failed to get controller snapshot",
+        )
+        .map(|_| unsafe { ControllerInfo::from_raw(ctrl_info) })
     }
 
     fn lock_impl(
@@ -51,15 +50,13 @@ impl<'handle> Controller<'handle> {
         level: ControllerLockLevel,
         flags: ControllerLockFlags,
     ) -> Result<LockedController<'handle>, (Self, NvmeError)> {
-        match unsafe { nvme_ctrl_lock(self.inner, level as u32, flags as u32) }
-        {
-            true => Ok(LockedController { controller: Some(self) }),
-            false => {
-                let error =
-                    self.fatal_context("failed to grab nvme controller lock");
-                Err((self, error))
-            }
+        if let Err(e) = self.check_result(
+            unsafe { nvme_ctrl_lock(self.inner, level as u32, flags as u32) },
+            || "failed to grab nvme controller lock",
+        ) {
+            return Err((self, e));
         }
+        Ok(LockedController { controller: Some(self) })
     }
 
     pub fn read_lock(self) -> Result<LockedController<'handle>, NvmeError> {
@@ -88,8 +85,10 @@ impl<'handle> Controller<'handle> {
             ControllerLockFlags::DontBlock,
         ) {
             Ok(lock) => TryLockResult::Ok(lock),
-            Err((c, e)) => match e {
-                NvmeError::LockWouldBlock(_) => TryLockResult::Locked(c),
+            Err((c, nvme_error)) => match nvme_error {
+                _ if nvme_error.code() == NvmeErrorCode::LockWouldBlock => {
+                    TryLockResult::Locked(c)
+                }
                 e => TryLockResult::Err(e),
             },
         }
@@ -103,8 +102,10 @@ impl<'handle> Controller<'handle> {
             ControllerLockFlags::DontBlock,
         ) {
             Ok(lock) => TryLockResult::Ok(lock),
-            Err((c, e)) => match e {
-                NvmeError::LockWouldBlock(_) => TryLockResult::Locked(c),
+            Err((c, nvme_error)) => match nvme_error {
+                _ if nvme_error.code() == NvmeErrorCode::LockWouldBlock => {
+                    TryLockResult::Locked(c)
+                }
                 e => TryLockResult::Err(e),
             },
         }
@@ -138,13 +139,11 @@ impl<'a> Drop for ControllerDiscovery<'a> {
 impl<'a> ControllerDiscovery<'a> {
     pub(crate) fn new(nvme: &'a Nvme) -> Result<Self, NvmeError> {
         let mut iter = std::ptr::null_mut();
-        match unsafe { nvme_ctrl_discover_init(nvme.0, &mut iter) } {
-            true => Ok(ControllerDiscovery { nvme, iter }),
-            false => {
-                Err(nvme
-                    .fatal_context("failed to init nvme controller discovery"))
-            }
-        }
+        nvme.check_result(
+            unsafe { nvme_ctrl_discover_init(nvme.0, &mut iter) },
+            || "failed to init nvme controller discovery",
+        )
+        .map(|_| ControllerDiscovery { nvme, iter })
     }
 
     fn internal_step(&self) -> Result<Option<Controller<'a>>, NvmeError> {
@@ -155,17 +154,20 @@ impl<'a> ControllerDiscovery<'a> {
             NVME_ITER_VALID => {
                 let di_node_t = unsafe { nvme_ctrl_disc_devi(nvme_ctr_disc) };
                 let mut nvme_ctrl: *mut nvme_ctrl_t = std::ptr::null_mut();
-                match unsafe {
-                    nvme_ctrl_init(self.nvme.0, di_node_t, &mut nvme_ctrl)
-                } {
-                    true => Ok(Some(Controller {
-                        inner: nvme_ctrl,
-                        _nvme: self.nvme,
-                    })),
-                    false => Err(self
-                        .nvme
-                        .fatal_context("failed to init nvme controller")),
-                }
+                self.nvme
+                    .check_result(
+                        unsafe {
+                            nvme_ctrl_init(
+                                self.nvme.0,
+                                di_node_t,
+                                &mut nvme_ctrl,
+                            )
+                        },
+                        || "failed to init nvme controller",
+                    )
+                    .map(|_| {
+                        Some(Controller { inner: nvme_ctrl, _nvme: self.nvme })
+                    })
             }
             NVME_ITER_DONE => Ok(None),
             NVME_ITER_ERROR => Err(self
@@ -198,11 +200,12 @@ impl<'handle> LibraryError for Controller<'handle> {
         unsafe { nvme_ctrl_syserr(self.inner) }
     }
 
-    fn to_error(&self, internal: crate::error::InternalError) -> Self::Error {
-        NvmeError::from_raw_with_internal_error(
-            unsafe { nvme_ctrl_err(self.inner) },
-            internal,
-        )
+    fn current_error(
+        &self,
+        internal: crate::error::InternalError,
+    ) -> Self::Error {
+        let raw = unsafe { nvme_ctrl_err(self.inner) };
+        NvmeError { code: NvmeErrorCode::from_raw(raw), error: internal }
     }
 }
 
@@ -229,12 +232,12 @@ impl<'handle> LockedController<'handle> {
         let controller =
             self.controller.as_ref().expect("controller is locked");
         let mut req = std::ptr::null_mut();
-        match unsafe { nvme_format_req_init(controller.inner, &mut req) } {
-            true => Ok(FormatRequestBuilder { req, controller: self }),
-            false => {
-                Err(controller.fatal_context("failed to create format request"))
-            }
-        }
+        controller
+            .check_result(
+                unsafe { nvme_format_req_init(controller.inner, &mut req) },
+                || "failed to create format request",
+            )
+            .map(|_| FormatRequestBuilder { req, controller: self })
     }
 }
 
@@ -259,38 +262,36 @@ impl<'ctrl> Drop for FormatRequestBuilder<'ctrl> {
 
 impl<'ctrl> FormatRequestBuilder<'ctrl> {
     pub fn set_lbaf(self, lbaf: u32) -> Result<Self, NvmeError> {
-        match unsafe { nvme_format_req_set_lbaf(self.req, lbaf) } {
-            true => Ok(self),
-            false => Err(self.controller.with_fatal_context(|| {
-                format!("failed to set LBA format {lbaf} on format request")
-            })),
-        }
+        self.controller
+            .check_result(
+                unsafe { nvme_format_req_set_lbaf(self.req, lbaf) },
+                || format!("failed to set LBA format {lbaf} on format request"),
+            )
+            .map(|_| self)
     }
 
     pub fn set_nsid(self, nsid: u32) -> Result<Self, NvmeError> {
-        match unsafe { nvme_format_req_set_nsid(self.req, nsid) } {
-            true => Ok(self),
-            false => Err(self.controller.with_fatal_context(|| {
-                format!("failed to set nsid {nsid} on format request")
-            })),
-        }
+        self.controller
+            .check_result(
+                unsafe { nvme_format_req_set_nsid(self.req, nsid) },
+                || format!("failed to set nsid {nsid} on format request"),
+            )
+            .map(|_| self)
     }
 
     pub fn set_ses(self, ses: u32) -> Result<Self, NvmeError> {
-        match unsafe { nvme_format_req_set_ses(self.req, ses) } {
-            true => Ok(self),
-            false => Err(self.controller.with_fatal_context(|| {
-                format!("failed to set ses {ses} on format request")
-            })),
-        }
+        self.controller
+            .check_result(
+                unsafe { nvme_format_req_set_ses(self.req, ses) },
+                || format!("failed to set ses {ses} on format request"),
+            )
+            .map(|_| self)
     }
 
     pub fn execute(self) -> Result<(), NvmeError> {
-        match unsafe { nvme_format_req_exec(self.req) } {
-            true => Ok(()),
-            false => Err(self
-                .controller
-                .fatal_context("failed to execute format request")),
-        }
+        self.controller
+            .check_result(unsafe { nvme_format_req_exec(self.req) }, || {
+                "failed to execute format request"
+            })
     }
 }

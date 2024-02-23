@@ -10,24 +10,21 @@ impl<'handle> LockedController<'handle> {
     pub fn wdc_resize_set(&self, size: u32) -> Result<(), NvmeError> {
         let controller =
             self.controller.as_ref().expect("controller is locked");
-        match unsafe { nvme_wdc_resize_set(controller.inner, size) } {
-            true => Ok(()),
-            false => {
-                Err(controller.fatal_context("failed to resize wdc device"))
-            }
-        }
+        controller.check_result(
+            unsafe { nvme_wdc_resize_set(controller.inner, size) },
+            || "failed to resize wdc device",
+        )
     }
 
     pub fn wdc_resize_get(&self) -> Result<u32, NvmeError> {
         let mut size = 0;
         let controller =
             self.controller.as_ref().expect("controller is locked");
-        match unsafe { nvme_wdc_resize_get(controller.inner, &mut size) } {
-            true => Ok(size),
-            false => {
-                Err(controller
-                    .fatal_context("failed to get size of wdc device"))
-            }
-        }
+        controller
+            .check_result(
+                unsafe { nvme_wdc_resize_get(controller.inner, &mut size) },
+                || "failed to get size of wdc device",
+            )
+            .map(|_| size)
     }
 }

@@ -9,7 +9,7 @@ pub(crate) trait LibraryError {
 
     fn get_errmsg(&self) -> String;
     fn get_syserr(&self) -> i32;
-    fn to_error(&self, internal: InternalError) -> Self::Error;
+    fn current_error(&self, internal: InternalError) -> Self::Error;
     fn fatal_context<C: Into<String>>(&self, context: C) -> Self::Error {
         let errmsg = self.get_errmsg();
         let syserr = self.get_syserr();
@@ -18,13 +18,27 @@ pub(crate) trait LibraryError {
         } else {
             std::io::Error::from_raw_os_error(syserr).to_string()
         };
-        self.to_error(InternalError { context: context.into(), syserr, errmsg })
+        self.current_error(InternalError {
+            context: context.into(),
+            syserr,
+            errmsg,
+        })
     }
-    fn with_fatal_context<C: Into<String>, F: FnOnce() -> C>(
+
+    fn check_result<C, F>(
         &self,
-        f: F,
-    ) -> Self::Error {
-        self.fatal_context(f())
+        result: bool,
+        context: F,
+    ) -> Result<(), Self::Error>
+    where
+        C: Into<String>,
+        F: FnOnce() -> C,
+    {
+        if result {
+            Ok(())
+        } else {
+            Err(self.fatal_context(context()))
+        }
     }
 }
 
@@ -48,7 +62,7 @@ impl<T: LibraryError> LibraryError for &T {
         (*self).get_syserr()
     }
 
-    fn to_error(&self, internal: InternalError) -> Self::Error {
-        (*self).to_error(internal)
+    fn current_error(&self, internal: InternalError) -> Self::Error {
+        (*self).current_error(internal)
     }
 }

@@ -5,6 +5,7 @@
 use std::{borrow::Cow, ffi::CStr, marker::PhantomData};
 
 use libnvme_sys::nvme::*;
+use strum_macros::FromRepr;
 use thiserror::Error;
 
 use crate::{
@@ -15,50 +16,50 @@ use crate::{
 };
 
 #[derive(Debug, Error)]
-pub enum NvmeInfoError {
-    #[error(transparent)]
-    Ok(InternalError),
-    #[error(transparent)]
-    Transport(InternalError),
-    #[error(transparent)]
-    Version(InternalError),
-    #[error(transparent)]
-    MissingCap(InternalError),
-    #[error(transparent)]
-    BadLbaFmt(InternalError),
-    #[error(transparent)]
-    PersistNvl(InternalError),
-    #[error(transparent)]
-    BadFmt(InternalError),
-    #[error(transparent)]
-    BadFmtData(InternalError),
-    #[error(transparent)]
-    NsInactive(InternalError),
-    #[error(transparent)]
-    NsNoBlkdev(InternalError),
+#[error("{error}")]
+pub struct NvmeInfoError {
+    code: NvmeInfoErrorCode,
+    error: InternalError,
 }
 
 impl NvmeInfoError {
-    pub(crate) fn from_raw_with_internal_error(
-        raw: u32,
-        internal: InternalError,
+    pub(crate) fn from_code_and_error(
+        code: NvmeInfoErrorCode,
+        error: InternalError,
     ) -> Self {
-        match raw {
-            NVME_INFO_ERR_OK => NvmeInfoError::Ok(internal),
-            NVME_INFO_ERR_TRANSPORT => NvmeInfoError::Transport(internal),
-            NVME_INFO_ERR_VERSION => NvmeInfoError::Version(internal),
-            NVME_INFO_ERR_MISSING_CAP => NvmeInfoError::MissingCap(internal),
-            NVME_INFO_ERR_BAD_LBA_FMT => NvmeInfoError::BadLbaFmt(internal),
-            NVME_INFO_ERR_PERSIST_NVL => NvmeInfoError::PersistNvl(internal),
-            NVME_INFO_ERR_BAD_FMT => NvmeInfoError::BadFmt(internal),
-            NVME_INFO_ERR_BAD_FMT_DATA => NvmeInfoError::BadFmtData(internal),
-            NVME_INFO_ERR_NS_INACTIVE => NvmeInfoError::NsInactive(internal),
-            NVME_INFO_ERR_NS_NO_BLKDEV => NvmeInfoError::NsNoBlkdev(internal),
-            // TODO map this to an error type so we don't crash someones program
-            _ => unreachable!("Unknown Error"),
-        }
+        Self { code, error }
+    }
+    pub fn code(&self) -> NvmeInfoErrorCode {
+        self.code
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
+pub enum NvmeInfoErrorCode {
+    Ok,
+    Transport,
+    Version,
+    MissingCap,
+    BadLbaFmt,
+    PersistNvl,
+    BadFmt,
+    BadFmtData,
+    NsInactive,
+    NsNoBlkdev,
+    // The following is a catchall if we fail to translate the error code,
+    // therefore we want to make sure it's not a valid option when calling
+    // from_repr()
+    #[strum(disabled)]
+    Unknown(u32),
+}
+
+impl NvmeInfoErrorCode {
+    pub(crate) fn from_raw(raw: u32) -> Self {
+        NvmeInfoErrorCode::from_repr(raw as usize)
+            .unwrap_or(NvmeInfoErrorCode::Unknown(raw))
+    }
+}
+
 pub struct ControllerInfo<'ctrl> {
     ctrl_info: *mut nvme_ctrl_info_t,
     _phantom: PhantomData<&'ctrl Controller<'ctrl>>,
@@ -106,10 +107,11 @@ impl<'ctrl> ControllerInfo<'ctrl> {
 
     pub fn pci_vid(&self) -> Result<u16, NvmeInfoError> {
         let mut vid = 0;
-        match unsafe { nvme_ctrl_info_pci_vid(self.ctrl_info, &mut vid) } {
-            true => Ok(vid),
-            false => Err(self.fatal_context("failed to get pci vid")),
-        }
+        self.check_result(
+            unsafe { nvme_ctrl_info_pci_vid(self.ctrl_info, &mut vid) },
+            || "failed to get pci vid",
+        )
+        .map(|_| vid)
     }
 
     fn nformats(&self) -> u32 {
@@ -118,12 +120,11 @@ impl<'ctrl> ControllerInfo<'ctrl> {
 
     fn nvm_lba_fmt(&self, index: u32) -> Result<LbaFormat<'_>, NvmeInfoError> {
         let mut lba: *const nvme_nvm_lba_fmt_t = std::ptr::null_mut();
-        if !unsafe { nvme_ctrl_info_format(self.ctrl_info, index, &mut lba) } {
-            return Err(self.fatal_context(format!(
-                "failed to get lba fmt for index {index}"
-            )));
-        }
-        Ok(unsafe { LbaFormat::from_raw(lba) })
+        self.check_result(
+            unsafe { nvme_ctrl_info_format(self.ctrl_info, index, &mut lba) },
+            || format!("failed to get lba fmt for index {index}"),
+        )
+        .map(|_| unsafe { LbaFormat::from_raw(lba) })
     }
 
     pub fn lba_formats(&self) -> Vec<Result<LbaFormat<'_>, NvmeInfoError>> {
@@ -143,10 +144,11 @@ impl<'ctrl> LibraryError for ControllerInfo<'ctrl> {
         unsafe { nvme_ctrl_info_syserr(self.ctrl_info) }
     }
 
-    fn to_error(&self, internal: InternalError) -> Self::Error {
-        NvmeInfoError::from_raw_with_internal_error(
-            unsafe { nvme_ctrl_info_err(self.ctrl_info) },
-            internal,
-        )
+    fn current_error(&self, internal: InternalError) -> Self::Error {
+        let raw = unsafe { nvme_ctrl_info_err(self.ctrl_info) };
+        NvmeInfoError {
+            code: NvmeInfoErrorCode::from_raw(raw),
+            error: internal,
+        }
     }
 }
