@@ -119,7 +119,7 @@ impl<'handle> Controller<'handle> {
     }
 }
 
-impl<'handle> Drop for Controller<'handle> {
+impl Drop for Controller<'_> {
     fn drop(&mut self) {
         unsafe { nvme_ctrl_fini(self.inner) }
     }
