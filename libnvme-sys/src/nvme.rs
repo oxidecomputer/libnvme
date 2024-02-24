@@ -123,7 +123,11 @@ pub const NVME_ITER_DONE: nvme_iter_t = 1;
 pub const NVME_ITER_ERROR: nvme_iter_t = 2;
 pub type nvme_iter_t = c_uint;
 
+pub const NVME_LOCK_L_READ: nvme_lock_level_t = 1;
+pub const NVME_LOCK_L_WRITE: nvme_lock_level_t = 2;
 pub type nvme_lock_level_t = c_uint;
+
+pub const NVME_LOCK_F_DONT_BLOCK: nvme_lock_flags_t = 1;
 pub type nvme_lock_flags_t = c_uint;
 
 pub const NVME_NS_DISC_F_ALL: nvme_ns_disc_level_t = 0;

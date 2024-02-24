@@ -15,13 +15,13 @@ use crate::{
 use libnvme_sys::nvme::*;
 
 enum ControllerLockLevel {
-    Read = 1,
-    Write,
+    Read = NVME_LOCK_L_READ as isize,
+    Write = NVME_LOCK_L_WRITE as isize,
 }
 
 enum ControllerLockFlags {
     Block = 0,
-    DontBlock = 1 << 0,
+    DontBlock = NVME_LOCK_F_DONT_BLOCK as isize,
 }
 
 pub enum TryLockResult<L, T, E> {
