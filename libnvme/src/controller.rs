@@ -30,12 +30,12 @@ pub enum TryLockResult<L, T, E> {
     Err(E),
 }
 
-pub struct Controller<'handle> {
+pub struct Controller<'a> {
     pub(crate) inner: *mut nvme_ctrl_t,
-    _nvme: &'handle Nvme,
+    _nvme: &'a Nvme,
 }
 
-impl<'handle> Controller<'handle> {
+impl<'a> Controller<'a> {
     pub fn get_info(&self) -> Result<ControllerInfo<'_>, NvmeError> {
         let mut ctrl_info: *mut nvme_ctrl_info_t = std::ptr::null_mut();
         self.check_result(
@@ -49,7 +49,7 @@ impl<'handle> Controller<'handle> {
         self,
         level: ControllerLockLevel,
         flags: ControllerLockFlags,
-    ) -> Result<LockedController<'handle>, (Self, NvmeError)> {
+    ) -> Result<LockedController<'a>, (Self, NvmeError)> {
         if let Err(e) = self.check_result(
             unsafe { nvme_ctrl_lock(self.inner, level as u32, flags as u32) },
             || "failed to grab nvme controller lock",
@@ -59,21 +59,17 @@ impl<'handle> Controller<'handle> {
         Ok(LockedController { controller: Some(self) })
     }
 
-    pub fn read_lock(
-        self,
-    ) -> Result<LockedController<'handle>, (Self, NvmeError)> {
+    pub fn read_lock(self) -> Result<LockedController<'a>, (Self, NvmeError)> {
         self.lock_impl(ControllerLockLevel::Read, ControllerLockFlags::Block)
     }
 
-    pub fn write_lock(
-        self,
-    ) -> Result<LockedController<'handle>, (Self, NvmeError)> {
+    pub fn write_lock(self) -> Result<LockedController<'a>, (Self, NvmeError)> {
         self.lock_impl(ControllerLockLevel::Write, ControllerLockFlags::Block)
     }
 
     pub fn try_read_lock(
         self,
-    ) -> TryLockResult<LockedController<'handle>, Self, NvmeError> {
+    ) -> TryLockResult<LockedController<'a>, Self, NvmeError> {
         match self.lock_impl(
             ControllerLockLevel::Read,
             ControllerLockFlags::DontBlock,
@@ -90,7 +86,7 @@ impl<'handle> Controller<'handle> {
 
     pub fn try_write_lock(
         self,
-    ) -> TryLockResult<LockedController<'handle>, Self, NvmeError> {
+    ) -> TryLockResult<LockedController<'a>, Self, NvmeError> {
         match self.lock_impl(
             ControllerLockLevel::Write,
             ControllerLockFlags::DontBlock,
@@ -174,15 +170,15 @@ impl<'a> ControllerDiscovery<'a> {
     }
 }
 
-impl<'handle> Iterator for ControllerDiscovery<'handle> {
-    type Item = Result<Controller<'handle>, NvmeError>;
+impl<'a> Iterator for ControllerDiscovery<'a> {
+    type Item = Result<Controller<'a>, NvmeError>;
 
-    fn next(&mut self) -> Option<Result<Controller<'handle>, NvmeError>> {
+    fn next(&mut self) -> Option<Result<Controller<'a>, NvmeError>> {
         self.internal_step().transpose()
     }
 }
 
-impl<'handle> LibraryError for Controller<'handle> {
+impl<'a> LibraryError for Controller<'a> {
     type Error = NvmeError;
 
     fn get_errmsg(&self) -> String {
@@ -203,11 +199,11 @@ impl<'handle> LibraryError for Controller<'handle> {
     }
 }
 
-pub struct LockedController<'handle> {
-    pub(crate) controller: Option<Controller<'handle>>,
+pub struct LockedController<'a> {
+    pub(crate) controller: Option<Controller<'a>>,
 }
 
-impl<'handle> Drop for LockedController<'handle> {
+impl<'a> Drop for LockedController<'a> {
     fn drop(&mut self) {
         if let Some(controller) = self.controller.take() {
             unsafe { nvme_ctrl_unlock(controller.inner) }
@@ -215,8 +211,8 @@ impl<'handle> Drop for LockedController<'handle> {
     }
 }
 
-impl<'handle> LockedController<'handle> {
-    pub fn unlock(mut self) -> Controller<'handle> {
+impl<'a> LockedController<'a> {
+    pub fn unlock(mut self) -> Controller<'a> {
         self.controller.take().expect("controller invariant violated")
     }
 
@@ -235,8 +231,8 @@ impl<'handle> LockedController<'handle> {
     }
 }
 
-impl<'handle> Deref for LockedController<'handle> {
-    type Target = Controller<'handle>;
+impl<'a> Deref for LockedController<'a> {
+    type Target = Controller<'a>;
 
     fn deref(&self) -> &Self::Target {
         self.controller.as_ref().expect("controller is locked")

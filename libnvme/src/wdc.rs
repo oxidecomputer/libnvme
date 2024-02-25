@@ -6,7 +6,7 @@ use crate::{controller::LockedController, error::LibraryError, NvmeError};
 
 use libnvme_sys::nvme::{nvme_wdc_resize_get, nvme_wdc_resize_set};
 
-impl<'handle> LockedController<'handle> {
+impl<'a> LockedController<'a> {
     pub fn wdc_resize_set(&self, size: u32) -> Result<(), NvmeError> {
         let controller =
             self.controller.as_ref().expect("controller is locked");
