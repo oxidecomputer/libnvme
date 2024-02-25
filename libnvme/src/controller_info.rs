@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::{borrow::Cow, ffi::CStr, marker::PhantomData};
+use std::{borrow::Cow, ffi::CStr};
 
 use libnvme_sys::nvme::*;
 use thiserror::Error;
@@ -66,26 +66,27 @@ impl NvmeInfoErrorCode {
     }
 }
 
-pub struct ControllerInfo<'ctrl> {
+pub struct ControllerInfo<'a> {
     ctrl_info: *mut nvme_ctrl_info_t,
-    _phantom: PhantomData<&'ctrl Controller<'ctrl>>,
+    _controller: &'a Controller<'a>,
 }
 
-impl<'ctrl> Drop for ControllerInfo<'ctrl> {
+impl<'a> ControllerInfo<'a> {
+    pub(crate) unsafe fn from_raw(
+        controller: &'a Controller<'a>,
+        ptr: *mut nvme_ctrl_info_t,
+    ) -> Self {
+        Self { ctrl_info: ptr, _controller: controller }
+    }
+}
+
+impl Drop for ControllerInfo<'_> {
     fn drop(&mut self) {
         unsafe { nvme_ctrl_info_free(self.ctrl_info) }
     }
 }
 
-impl<'ctrl> FfiPtr for ControllerInfo<'ctrl> {
-    type Ptr = *mut nvme_ctrl_info_t;
-
-    unsafe fn from_raw(ptr: Self::Ptr) -> Self {
-        Self { ctrl_info: ptr, _phantom: PhantomData }
-    }
-}
-
-impl<'ctrl> ControllerInfo<'ctrl> {
+impl<'a> ControllerInfo<'a> {
     pub fn model(&self) -> Cow<'_, str> {
         unsafe {
             CStr::from_ptr(nvme_ctrl_info_model(self.ctrl_info))
@@ -138,7 +139,7 @@ impl<'ctrl> ControllerInfo<'ctrl> {
     }
 }
 
-impl<'ctrl> LibraryError for ControllerInfo<'ctrl> {
+impl<'a> LibraryError for ControllerInfo<'a> {
     type Error = NvmeInfoError;
 
     fn get_errmsg(&self) -> String {

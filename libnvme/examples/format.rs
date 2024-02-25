@@ -9,7 +9,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let discovery = nvme.controller_discovery()?;
 
     for controller in discovery.into_iter() {
-        let controller = controller?.write_lock()?;
+        let controller =
+            controller?.write_lock().map_err(|(_controller, e)| e)?;
         let info = controller.get_info()?;
         if info.serial() == "NVME-5-0" {
             let nsdisc = controller

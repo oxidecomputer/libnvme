@@ -8,7 +8,6 @@ use crate::{
     controller_info::ControllerInfo,
     error::LibraryError,
     namespace::{NamespaceDiscovery, NamespaceDiscoveryLevel},
-    util::FfiPtr,
     Nvme, NvmeError, NvmeErrorCode,
 };
 
@@ -42,7 +41,7 @@ impl<'a> Controller<'a> {
             unsafe { nvme_ctrl_info_snap(self.inner, &mut ctrl_info) },
             || "failed to get controller snapshot",
         )
-        .map(|_| unsafe { ControllerInfo::from_raw(ctrl_info) })
+        .map(|_| unsafe { ControllerInfo::from_raw(self, ctrl_info) })
     }
 
     fn lock_impl(
