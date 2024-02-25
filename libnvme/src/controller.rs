@@ -48,32 +48,40 @@ impl<'a> Controller<'a> {
         self,
         level: ControllerLockLevel,
         flags: ControllerLockFlags,
-    ) -> Result<LockedController<'a>, (Self, NvmeError)> {
+    ) -> Result<Self, (Self, NvmeError)> {
         if let Err(e) = self.check_result(
             unsafe { nvme_ctrl_lock(self.inner, level as u32, flags as u32) },
             || "failed to grab nvme controller lock",
         ) {
             return Err((self, e));
         }
-        Ok(LockedController { controller: Some(self) })
+        Ok(self)
     }
 
-    pub fn read_lock(self) -> Result<LockedController<'a>, (Self, NvmeError)> {
+    pub fn read_lock(
+        self,
+    ) -> Result<ReadLockedController<'a>, (Self, NvmeError)> {
         self.lock_impl(ControllerLockLevel::Read, ControllerLockFlags::Block)
+            .map(|c| ReadLockedController { controller: Some(c) })
     }
 
-    pub fn write_lock(self) -> Result<LockedController<'a>, (Self, NvmeError)> {
+    pub fn write_lock(
+        self,
+    ) -> Result<WriteLockedController<'a>, (Self, NvmeError)> {
         self.lock_impl(ControllerLockLevel::Write, ControllerLockFlags::Block)
+            .map(|c| WriteLockedController { controller: Some(c) })
     }
 
     pub fn try_read_lock(
         self,
-    ) -> TryLockResult<LockedController<'a>, Self, NvmeError> {
+    ) -> TryLockResult<ReadLockedController<'a>, Self, NvmeError> {
         match self.lock_impl(
             ControllerLockLevel::Read,
             ControllerLockFlags::DontBlock,
         ) {
-            Ok(lock) => TryLockResult::Ok(lock),
+            Ok(c) => {
+                TryLockResult::Ok(ReadLockedController { controller: Some(c) })
+            }
             Err((c, nvme_error)) => match nvme_error {
                 _ if nvme_error.code() == NvmeErrorCode::LockWouldBlock => {
                     TryLockResult::Locked(c)
@@ -85,12 +93,14 @@ impl<'a> Controller<'a> {
 
     pub fn try_write_lock(
         self,
-    ) -> TryLockResult<LockedController<'a>, Self, NvmeError> {
+    ) -> TryLockResult<WriteLockedController<'a>, Self, NvmeError> {
         match self.lock_impl(
             ControllerLockLevel::Write,
             ControllerLockFlags::DontBlock,
         ) {
-            Ok(lock) => TryLockResult::Ok(lock),
+            Ok(c) => {
+                TryLockResult::Ok(WriteLockedController { controller: Some(c) })
+            }
             Err((c, nvme_error)) => match nvme_error {
                 _ if nvme_error.code() == NvmeErrorCode::LockWouldBlock => {
                     TryLockResult::Locked(c)
@@ -198,11 +208,11 @@ impl<'a> LibraryError for Controller<'a> {
     }
 }
 
-pub struct LockedController<'a> {
+pub struct ReadLockedController<'a> {
     pub(crate) controller: Option<Controller<'a>>,
 }
 
-impl<'a> Drop for LockedController<'a> {
+impl<'a> Drop for ReadLockedController<'a> {
     fn drop(&mut self) {
         if let Some(controller) = self.controller.take() {
             unsafe { nvme_ctrl_unlock(controller.inner) }
@@ -210,7 +220,36 @@ impl<'a> Drop for LockedController<'a> {
     }
 }
 
-impl<'a> LockedController<'a> {
+impl<'a> ReadLockedController<'a> {
+    pub fn unlock(mut self) -> Controller<'a> {
+        let controller =
+            self.controller.take().expect("controller invariant violated");
+        unsafe { nvme_ctrl_unlock(controller.inner) };
+        controller
+    }
+}
+
+impl<'a> Deref for ReadLockedController<'a> {
+    type Target = Controller<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        self.controller.as_ref().expect("controller is locked")
+    }
+}
+
+pub struct WriteLockedController<'a> {
+    pub(crate) controller: Option<Controller<'a>>,
+}
+
+impl<'a> Drop for WriteLockedController<'a> {
+    fn drop(&mut self) {
+        if let Some(controller) = self.controller.take() {
+            unsafe { nvme_ctrl_unlock(controller.inner) }
+        }
+    }
+}
+
+impl<'a> WriteLockedController<'a> {
     pub fn unlock(mut self) -> Controller<'a> {
         let controller =
             self.controller.take().expect("controller invariant violated");
@@ -233,7 +272,7 @@ impl<'a> LockedController<'a> {
     }
 }
 
-impl<'a> Deref for LockedController<'a> {
+impl<'a> Deref for WriteLockedController<'a> {
     type Target = Controller<'a>;
 
     fn deref(&self) -> &Self::Target {
@@ -243,7 +282,7 @@ impl<'a> Deref for LockedController<'a> {
 
 pub struct FormatRequestBuilder<'ctrl> {
     req: *mut nvme_format_req_t,
-    controller: &'ctrl LockedController<'ctrl>,
+    controller: &'ctrl WriteLockedController<'ctrl>,
 }
 
 impl<'ctrl> Drop for FormatRequestBuilder<'ctrl> {
