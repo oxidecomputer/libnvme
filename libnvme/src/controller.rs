@@ -59,22 +59,16 @@ impl<'handle> Controller<'handle> {
         Ok(LockedController { controller: Some(self) })
     }
 
-    pub fn read_lock(self) -> Result<LockedController<'handle>, NvmeError> {
-        match self
-            .lock_impl(ControllerLockLevel::Read, ControllerLockFlags::Block)
-        {
-            Ok(l) => Ok(l),
-            Err((_, e)) => Err(e),
-        }
+    pub fn read_lock(
+        self,
+    ) -> Result<LockedController<'handle>, (Self, NvmeError)> {
+        self.lock_impl(ControllerLockLevel::Read, ControllerLockFlags::Block)
     }
 
-    pub fn write_lock(self) -> Result<LockedController<'handle>, NvmeError> {
-        match self
-            .lock_impl(ControllerLockLevel::Write, ControllerLockFlags::Block)
-        {
-            Ok(l) => Ok(l),
-            Err((_, e)) => Err(e),
-        }
+    pub fn write_lock(
+        self,
+    ) -> Result<LockedController<'handle>, (Self, NvmeError)> {
+        self.lock_impl(ControllerLockLevel::Write, ControllerLockFlags::Block)
     }
 
     pub fn try_read_lock(
