@@ -134,8 +134,10 @@ impl<'a> ControllerInfo<'a> {
         .map(|_| unsafe { LbaFormat::from_raw(lba) })
     }
 
-    pub fn lba_formats(&self) -> Vec<Result<LbaFormat<'_>, NvmeInfoError>> {
-        (0..self.num_formats()).map(|i| self.nvm_lba_fmt(i)).collect()
+    pub fn lba_formats(
+        &self,
+    ) -> impl Iterator<Item = Result<LbaFormat<'_>, NvmeInfoError>> {
+        (0..self.num_formats()).map(|i| self.nvm_lba_fmt(i))
     }
 }
 
