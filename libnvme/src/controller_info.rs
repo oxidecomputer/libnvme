@@ -108,7 +108,7 @@ impl<'a> ControllerInfo<'a> {
         }
     }
 
-    pub fn number_of_ns(&self) -> u32 {
+    pub fn num_namespaces(&self) -> u32 {
         unsafe { nvme_ctrl_info_nns(self.ctrl_info) }
     }
 
@@ -121,7 +121,7 @@ impl<'a> ControllerInfo<'a> {
         .map(|_| vid)
     }
 
-    fn nformats(&self) -> u32 {
+    fn num_formats(&self) -> u32 {
         unsafe { nvme_ctrl_info_nformats(self.ctrl_info) }
     }
 
@@ -135,7 +135,7 @@ impl<'a> ControllerInfo<'a> {
     }
 
     pub fn lba_formats(&self) -> Vec<Result<LbaFormat<'_>, NvmeInfoError>> {
-        (0..self.nformats()).map(|i| self.nvm_lba_fmt(i)).collect()
+        (0..self.num_formats()).map(|i| self.nvm_lba_fmt(i)).collect()
     }
 }
 
