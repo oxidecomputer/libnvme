@@ -213,7 +213,10 @@ impl<'a> Drop for LockedController<'a> {
 
 impl<'a> LockedController<'a> {
     pub fn unlock(mut self) -> Controller<'a> {
-        self.controller.take().expect("controller invariant violated")
+        let controller =
+            self.controller.take().expect("controller invariant violated");
+        unsafe { nvme_ctrl_unlock(controller.inner) };
+        controller
     }
 
     pub fn format_request(
