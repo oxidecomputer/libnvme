@@ -14,7 +14,7 @@ pub enum Performance {
     Better,
     Good,
     Degraded,
-    Unknown,
+    Unknown(u32),
 }
 
 impl From<u32> for Performance {
@@ -24,7 +24,7 @@ impl From<u32> for Performance {
             1 => Self::Better,
             2 => Self::Good,
             3 => Self::Degraded,
-            _ => Self::Unknown,
+            perf => Self::Unknown(perf),
         }
     }
 }
