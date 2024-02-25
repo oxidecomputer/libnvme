@@ -5,7 +5,6 @@
 use std::{borrow::Cow, ffi::CStr, marker::PhantomData};
 
 use libnvme_sys::nvme::*;
-use strum_macros::FromRepr;
 use thiserror::Error;
 
 use crate::{
@@ -34,7 +33,7 @@ impl NvmeInfoError {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NvmeInfoErrorCode {
     Ok,
     Transport,
@@ -46,17 +45,24 @@ pub enum NvmeInfoErrorCode {
     BadFmtData,
     NsInactive,
     NsNoBlkdev,
-    // The following is a catchall if we fail to translate the error code,
-    // therefore we want to make sure it's not a valid option when calling
-    // from_repr()
-    #[strum(disabled)]
     Unknown(u32),
 }
 
 impl NvmeInfoErrorCode {
     pub(crate) fn from_raw(raw: u32) -> Self {
-        NvmeInfoErrorCode::from_repr(raw as usize)
-            .unwrap_or(NvmeInfoErrorCode::Unknown(raw))
+        match raw {
+            NVME_INFO_ERR_OK => NvmeInfoErrorCode::Ok,
+            NVME_INFO_ERR_TRANSPORT => NvmeInfoErrorCode::Transport,
+            NVME_INFO_ERR_VERSION => NvmeInfoErrorCode::Version,
+            NVME_INFO_ERR_MISSING_CAP => NvmeInfoErrorCode::MissingCap,
+            NVME_INFO_ERR_BAD_LBA_FMT => NvmeInfoErrorCode::BadLbaFmt,
+            NVME_INFO_ERR_PERSIST_NVL => NvmeInfoErrorCode::PersistNvl,
+            NVME_INFO_ERR_BAD_FMT => NvmeInfoErrorCode::BadFmt,
+            NVME_INFO_ERR_BAD_FMT_DATA => NvmeInfoErrorCode::BadFmtData,
+            NVME_INFO_ERR_NS_INACTIVE => NvmeInfoErrorCode::NsInactive,
+            NVME_INFO_ERR_NS_NO_BLKDEV => NvmeInfoErrorCode::NsNoBlkdev,
+            code => NvmeInfoErrorCode::Unknown(code),
+        }
     }
 }
 

@@ -6,6 +6,4 @@ edition = "2021"
 
 [dependencies]
 libnvme-sys.workspace = true
-strum.workspace = true
-strum_macros.workspace = true
 thiserror.workspace = true
