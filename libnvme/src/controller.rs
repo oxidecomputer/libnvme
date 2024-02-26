@@ -8,6 +8,7 @@ use crate::{
     controller_info::ControllerInfo,
     error::LibraryError,
     namespace::{NamespaceDiscovery, NamespaceDiscoveryLevel},
+    util::FfiPtr,
     Nvme, NvmeError, NvmeErrorCode,
 };
 
@@ -35,13 +36,13 @@ pub struct Controller<'a> {
 }
 
 impl<'a> Controller<'a> {
-    pub fn get_info(&self) -> Result<ControllerInfo<'_>, NvmeError> {
+    pub fn get_info(&self) -> Result<ControllerInfo, NvmeError> {
         let mut ctrl_info: *mut nvme_ctrl_info_t = std::ptr::null_mut();
         self.check_result(
             unsafe { nvme_ctrl_info_snap(self.inner, &mut ctrl_info) },
             || "failed to get controller snapshot",
         )
-        .map(|_| unsafe { ControllerInfo::from_raw(self, ctrl_info) })
+        .map(|_| unsafe { ControllerInfo::from_raw(ctrl_info) })
     }
 
     fn lock_impl(

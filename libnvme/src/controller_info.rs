@@ -8,7 +8,6 @@ use libnvme_sys::nvme::*;
 use thiserror::Error;
 
 use crate::{
-    controller::Controller,
     error::{InternalError, LibraryError},
     lba::LbaFormat,
     util::FfiPtr,
@@ -66,69 +65,62 @@ impl NvmeInfoErrorCode {
     }
 }
 
-pub struct ControllerInfo<'a> {
-    ctrl_info: *mut nvme_ctrl_info_t,
-    _controller: &'a Controller<'a>,
-}
+pub struct ControllerInfo(*mut nvme_ctrl_info_t);
 
-impl<'a> ControllerInfo<'a> {
-    pub(crate) unsafe fn from_raw(
-        controller: &'a Controller<'a>,
-        ptr: *mut nvme_ctrl_info_t,
-    ) -> Self {
-        Self { ctrl_info: ptr, _controller: controller }
+impl FfiPtr for ControllerInfo {
+    type Ptr = *mut nvme_ctrl_info_t;
+
+    unsafe fn from_raw(ptr: Self::Ptr) -> Self {
+        Self(ptr)
     }
 }
 
-impl Drop for ControllerInfo<'_> {
+impl Drop for ControllerInfo {
     fn drop(&mut self) {
-        unsafe { nvme_ctrl_info_free(self.ctrl_info) }
+        unsafe { nvme_ctrl_info_free(self.0) }
     }
 }
 
-impl<'a> ControllerInfo<'a> {
+impl ControllerInfo {
     pub fn model(&self) -> Cow<'_, str> {
         unsafe {
-            CStr::from_ptr(nvme_ctrl_info_model(self.ctrl_info))
-                .to_string_lossy()
+            CStr::from_ptr(nvme_ctrl_info_model(self.0)).to_string_lossy()
         }
     }
 
     pub fn serial(&self) -> Cow<'_, str> {
         unsafe {
-            CStr::from_ptr(nvme_ctrl_info_serial(self.ctrl_info))
-                .to_string_lossy()
+            CStr::from_ptr(nvme_ctrl_info_serial(self.0)).to_string_lossy()
         }
     }
 
     pub fn fwrev(&self) -> Cow<'_, str> {
         unsafe {
-            CStr::from_ptr(nvme_ctrl_info_fwrev(self.ctrl_info))
-                .to_string_lossy()
+            CStr::from_ptr(nvme_ctrl_info_fwrev(self.0)).to_string_lossy()
         }
     }
 
     pub fn num_namespaces(&self) -> u32 {
-        unsafe { nvme_ctrl_info_nns(self.ctrl_info) }
+        unsafe { nvme_ctrl_info_nns(self.0) }
     }
 
     pub fn pci_vid(&self) -> Result<u16, NvmeInfoError> {
         let mut vid = 0;
         self.check_result(
-            unsafe { nvme_ctrl_info_pci_vid(self.ctrl_info, &mut vid) },
+            unsafe { nvme_ctrl_info_pci_vid(self.0, &mut vid) },
             || "failed to get pci vid",
         )
         .map(|_| vid)
     }
 
     fn num_formats(&self) -> u32 {
-        unsafe { nvme_ctrl_info_nformats(self.ctrl_info) }
+        unsafe { nvme_ctrl_info_nformats(self.0) }
     }
 
     fn nvm_lba_fmt(&self, index: u32) -> Result<LbaFormat<'_>, NvmeInfoError> {
         let mut lba: *const nvme_nvm_lba_fmt_t = std::ptr::null_mut();
         self.check_result(
-            unsafe { nvme_ctrl_info_format(self.ctrl_info, index, &mut lba) },
+            unsafe { nvme_ctrl_info_format(self.0, index, &mut lba) },
             || format!("failed to get lba fmt for index {index}"),
         )
         .map(|_| unsafe { LbaFormat::from_raw(lba) })
@@ -141,20 +133,20 @@ impl<'a> ControllerInfo<'a> {
     }
 }
 
-impl<'a> LibraryError for ControllerInfo<'a> {
+impl LibraryError for ControllerInfo {
     type Error = NvmeInfoError;
 
     fn get_errmsg(&self) -> String {
-        let errmsg = unsafe { nvme_ctrl_info_errmsg(self.ctrl_info) };
+        let errmsg = unsafe { nvme_ctrl_info_errmsg(self.0) };
         unsafe { CStr::from_ptr(errmsg) }.to_string_lossy().to_string()
     }
 
     fn get_syserr(&self) -> i32 {
-        unsafe { nvme_ctrl_info_syserr(self.ctrl_info) }
+        unsafe { nvme_ctrl_info_syserr(self.0) }
     }
 
     fn current_error(&self, internal: InternalError) -> Self::Error {
-        let raw = unsafe { nvme_ctrl_info_err(self.ctrl_info) };
+        let raw = unsafe { nvme_ctrl_info_err(self.0) };
         NvmeInfoError {
             code: NvmeInfoErrorCode::from_raw(raw),
             error: internal,
