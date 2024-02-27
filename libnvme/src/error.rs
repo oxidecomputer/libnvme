@@ -13,11 +13,7 @@ pub(crate) trait LibraryError {
     fn fatal_context<C: Into<String>>(&self, context: C) -> Self::Error {
         let errmsg = self.get_errmsg();
         let syserr = self.get_syserr();
-        let syserr = if syserr == 0 {
-            "no system errno".to_string()
-        } else {
-            std::io::Error::from_raw_os_error(syserr).to_string()
-        };
+        let syserr = std::io::Error::from_raw_os_error(syserr);
         self.current_error(InternalError {
             context: context.into(),
             syserr,
@@ -43,10 +39,10 @@ pub(crate) trait LibraryError {
 }
 
 #[derive(Debug, Error)]
-#[error("{context}: {errmsg} ({syserr})")]
+#[error("{context}: {errmsg} [{syserr}]")]
 pub struct InternalError {
     context: String,
-    syserr: String,
+    syserr: std::io::Error,
     errmsg: String,
 }
 
