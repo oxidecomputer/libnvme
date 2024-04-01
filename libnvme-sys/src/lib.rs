@@ -7,6 +7,7 @@
 #![allow(non_snake_case)]
 
 pub mod devinfo;
+pub mod identify;
 pub mod nvme;
 
 /// Generate an opaque type for C FFI.

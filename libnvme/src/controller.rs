@@ -2,11 +2,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::{ffi::CStr, ops::Deref};
+use std::{ffi::CStr, mem::MaybeUninit, ops::Deref};
 
 use crate::{
     controller_info::ControllerInfo,
     error::LibraryError,
+    logpage::{get_logpage_size, FirmwareLogpage},
     namespace::{NamespaceDiscovery, NamespaceDiscoveryLevel},
     util::FfiPtr,
     Nvme, NvmeError, NvmeErrorCode,
@@ -28,6 +29,23 @@ pub enum TryLockResult<L, T, E> {
     Ok(L),
     Locked(T),
     Err(E),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum LogPageName {
+    Firmware,
+}
+
+impl LogPageName {
+    fn as_cstr(&self) -> &CStr {
+        // TODO C string literals were introduced in rust 1.77 and we should
+        // eventually switch to them once we are comfortable bumping the MSRV.
+        match self {
+            LogPageName::Firmware => {
+                CStr::from_bytes_until_nul(b"firmware\0").expect("has nul")
+            }
+        }
+    }
 }
 
 pub struct Controller<'a> {
@@ -116,6 +134,60 @@ impl<'a> Controller<'a> {
         level: NamespaceDiscoveryLevel,
     ) -> Result<NamespaceDiscovery<'_>, NvmeError> {
         NamespaceDiscovery::new(self, level)
+    }
+
+    fn get_logpage_impl(
+        &self,
+        name: LogPageName,
+    ) -> Result<(*mut nvme_log_disc_t, *mut nvme_log_req_t), NvmeError> {
+        let mut disc = std::ptr::null_mut();
+        let mut req = std::ptr::null_mut();
+        self.check_result(
+            unsafe {
+                nvme_log_req_init_by_name(
+                    self.inner,
+                    name.as_cstr().as_ptr(),
+                    0,
+                    &mut disc,
+                    &mut req,
+                )
+            },
+            // XXX use strum to get just the name of the page?
+            || format!("failed to get logpage {:?}", name),
+        )?;
+
+        Ok((disc, req))
+    }
+
+    pub fn get_firmware(&self) -> Result<FirmwareLogpage, NvmeError> {
+        let (disc, req) = self.get_logpage_impl(LogPageName::Firmware)?;
+        let logpage_size = get_logpage_size(disc, req);
+        let mut buf = MaybeUninit::<nvme_fwslot_log_t>::uninit();
+        self.check_result(
+            unsafe {
+                nvme_log_req_set_output(
+                    req,
+                    buf.as_mut_ptr() as _,
+                    logpage_size,
+                )
+            },
+            || format!("failed to set logpage req size to {logpage_size}"),
+        )?;
+
+        self.check_result(unsafe { nvme_log_req_exec(req) }, || {
+            "failed to execute firmware log request"
+        })?;
+
+        let info = self.get_info()?;
+        let identify = info.get_controller_info_identify();
+        let nslots = unsafe { (*identify).id_frmw.fw_nslot() };
+        let readonly = unsafe { (*identify).id_frmw.fw_readonly() };
+        println!("number of slots {nslots} and is readonly {readonly}");
+
+        // Our request was successful so we can assume this struct has been
+        // populated now.
+        let logpage = unsafe { buf.assume_init() };
+        Ok(FirmwareLogpage::init_from_raw(logpage))
     }
 }
 

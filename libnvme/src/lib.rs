@@ -13,6 +13,7 @@ pub mod controller;
 pub mod controller_info;
 mod error;
 mod lba;
+mod logpage;
 pub mod namespace;
 mod util;
 mod wdc;

@@ -3,8 +3,19 @@
 version = 3
 
 [[package]]
+name = "bitfield-struct"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b0fe3d90b1534e1b0e92008ad2d9f9a3ddb650965ae0592ed1d1031b9dea94f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "libnvme"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "libnvme-sys",
  "thiserror",
@@ -13,6 +24,9 @@ dependencies = [
 [[package]]
 name = "libnvme-sys"
 version = "0.0.0"
+dependencies = [
+ "bitfield-struct",
+]
 
 [[package]]
 name = "proc-macro2"

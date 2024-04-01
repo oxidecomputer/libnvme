@@ -4,7 +4,7 @@
 
 use std::{borrow::Cow, ffi::CStr};
 
-use libnvme_sys::nvme::*;
+use libnvme_sys::{identify::nvme_identify_ctrl_t, nvme::*};
 use thiserror::Error;
 
 use crate::{
@@ -82,6 +82,15 @@ impl Drop for ControllerInfo {
 }
 
 impl ControllerInfo {
+    // Private to the crate for now until it's determined to be useful to
+    // consumers.
+    // XXX return a reference that you can clone?
+    pub(crate) fn get_controller_info_identify(
+        &self,
+    ) -> *const nvme_identify_ctrl_t {
+        unsafe { nvme_ctrl_info_identify(self.0) }
+    }
+
     pub fn model(&self) -> Cow<'_, str> {
         unsafe {
             CStr::from_ptr(nvme_ctrl_info_model(self.0)).to_string_lossy()
