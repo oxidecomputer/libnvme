@@ -12,22 +12,23 @@ pub struct nvme_uint128_t {
 /* NVMe Queue Entry Size bitfield */
 #[bitfield(u8)]
 pub struct nvme_idctl_qes_t {
+    #[bits(4, access = RO)]
     /// minimum entry size
-    #[bits(4, access = RO)]
     qes_min: u8,
-    /// maximum entry size
     #[bits(4, access = RO)]
+    /// maximum entry size
     qes_max: u8,
 }
 
 /* NVMe Power State Descriptor */
 #[bitfield(u64)]
 pub struct nvme_idctl_psd_t_chunk_1 {
+    #[bits(16, access = RO)]
     /// Maximum Power
     psd_mp: u16,
     #[bits(8)]
     /// psd_rsvd1
-    __: u8,
+    __: B8,
     #[bits(1, access = RO)]
     /// Max Power Scale (1.1)
     psd_mps: u8,
@@ -47,8 +48,8 @@ pub struct nvme_idctl_psd_t_chunk_2 {
     #[bits(32, access = RO)]
     /* Exit Latency */
     psd_exlat: u32,
-    /* Relative Read Throughput */
     #[bits(5, access = RO)]
+    /* Relative Read Throughput */
     psd_rrt: u8,
     #[bits(3)]
     /// psd_rsvd3
@@ -75,10 +76,12 @@ pub struct nvme_idctl_psd_t_chunk_2 {
 
 #[bitfield(u64)]
 pub struct nvme_idctl_psd_t_chunk_3 {
+    #[bits(16, access = RO)]
     /// Idle Power (1.2)
     psd_idlp: u16,
-    #[bits(6, access = RO)]
-    psd_rsvd7: u8,
+    #[bits(6)]
+    /// psd_rsvd7
+    __: u8,
     #[bits(2, access = RO)]
     /// Idle Power Scale (1.2)
     psd_ips: u8,
@@ -143,7 +146,7 @@ pub struct IdMic {
 pub struct IdOaes {
     #[bits(8)]
     /// oaes_rsvd0
-    __: u8,
+    __: B8,
     #[bits(1, access = RO)]
     /// Namespace Attribute Notices (1.2)
     oaes_nsan: u8,
@@ -219,7 +222,7 @@ pub struct IdNvmsr {
     nvmsr_nvmee: u8,
     #[bits(6)]
     /// nvmsr_rsvd
-    __: u8,
+    __: B6,
 }
 
 #[bitfield(u8)]
@@ -244,7 +247,7 @@ pub struct IdMec {
     mec_pcieme: u8,
     #[bits(6)]
     /// mec_rsvd
-    __: u8,
+    __: B6,
 }
 
 #[bitfield(u16)]
@@ -299,7 +302,7 @@ pub struct IdFrmw {
     fw_norst: u8,
     #[bits(3)]
     /// fw_rsvd
-    __: u8,
+    __: B3,
 }
 
 #[bitfield(u8)]
@@ -432,7 +435,7 @@ pub struct ApAnacap {
     anacap_chg: u8,
     #[bits(1)]
     /// anacap_rsvd
-    __: u8,
+    __: B1,
     #[bits(1, access = RO)]
     /// ID Changes with NS Attach (1.4)
     anacap_grpns: u8,
@@ -470,7 +473,7 @@ pub struct IdOncs {
     on_verify: u8,
     #[bits(8)]
     /// on_rsvd
-    __: u8,
+    __: B8,
 }
 
 #[bitfield(u16)]
