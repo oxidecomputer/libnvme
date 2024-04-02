@@ -14,10 +14,10 @@ pub struct nvme_uint128_t {
 pub struct nvme_idctl_qes_t {
     #[bits(4, access = RO)]
     /// minimum entry size
-    qes_min: u8,
+    pub qes_min: u8,
     #[bits(4, access = RO)]
     /// maximum entry size
-    qes_max: u8,
+    pub qes_max: u8,
 }
 
 /* NVMe Power State Descriptor */
@@ -25,50 +25,50 @@ pub struct nvme_idctl_qes_t {
 pub struct nvme_idctl_psd_t_chunk_1 {
     #[bits(16, access = RO)]
     /// Maximum Power
-    psd_mp: u16,
+    pub psd_mp: u16,
     #[bits(8)]
     /// psd_rsvd1
     __: B8,
     #[bits(1, access = RO)]
     /// Max Power Scale (1.1)
-    psd_mps: u8,
+    pub psd_mps: u8,
     #[bits(1, access = RO)]
     /// Non-Operational State (1.1)
-    psd_nops: u8,
+    pub psd_nops: u8,
     #[bits(6)]
     /// psd_rsvd2
     __: B6,
     #[bits(32, access = RO)]
     /// Entry Latency
-    psd_enlat: u32,
+    pub psd_enlat: u32,
 }
 
 #[bitfield(u64)]
 pub struct nvme_idctl_psd_t_chunk_2 {
     #[bits(32, access = RO)]
     /* Exit Latency */
-    psd_exlat: u32,
+    pub psd_exlat: u32,
     #[bits(5, access = RO)]
     /* Relative Read Throughput */
-    psd_rrt: u8,
+    pub psd_rrt: u8,
     #[bits(3)]
     /// psd_rsvd3
     __: B3,
     #[bits(5, access = RO)]
     /* Relative Read Latency */
-    psd_rrl: u8,
+    pub psd_rrl: u8,
     #[bits(3)]
     /// psd_rsvd4
     __: B3,
     #[bits(5, access = RO)]
     /* Relative Write Throughput */
-    psd_rwt: u8,
+    pub psd_rwt: u8,
     #[bits(3)]
     /// psd_rsvd5
     __: B3,
     #[bits(5, access = RO)]
     /* Relative Write Latency */
-    psd_rwl: u8,
+    pub psd_rwl: u8,
     #[bits(3)]
     /// psd_rsvd6
     __: B3,
@@ -78,28 +78,28 @@ pub struct nvme_idctl_psd_t_chunk_2 {
 pub struct nvme_idctl_psd_t_chunk_3 {
     #[bits(16, access = RO)]
     /// Idle Power (1.2)
-    psd_idlp: u16,
+    pub psd_idlp: u16,
     #[bits(6)]
     /// psd_rsvd7
     __: u8,
     #[bits(2, access = RO)]
     /// Idle Power Scale (1.2)
-    psd_ips: u8,
+    pub psd_ips: u8,
     #[bits(8)]
     /// psd_rsvd8
     __: B8,
     #[bits(16)]
     /// Active Power (1.2)
-    psd_actp: u16,
+    pub psd_actp: u16,
     #[bits(3, access = RO)]
     /// Active Power Workload (1.2)
-    psd_apw: u8,
+    pub psd_apw: u8,
     #[bits(3)]
     /// psd_rsvd9
     __: B3,
     #[bits(2, access = RO)]
     /// Active Power Scale
-    psd_aps: u8,
+    pub psd_aps: u8,
     #[bits(8)]
     /// psd_rsvd10 -- the last 64 bits are in the top level struct
     __: B8,
@@ -127,19 +127,19 @@ const NVME_FWVER_SZ: usize = 8;
 pub struct IdMic {
     #[bits(1, access = RO)]
     /// HW has multiple PCIe interfaces
-    m_multi_pci: u8,
+    pub m_multi_pci: u8,
     #[bits(1, access = RO)]
     /// HW has multiple controllers (1.1)
-    m_multi_ctrl: u8,
+    pub m_multi_ctrl: u8,
     #[bits(1, access = RO)]
     /// Controller is SR-IOV virt fn (1.1)
-    m_sr_iov: u8,
+    pub m_sr_iov: u8,
     #[bits(1, access = RO)]
     /// ANA Reporting Supported (1.4)
-    m_anar_sup: u8,
+    pub m_anar_sup: u8,
     /// m_rsvd
     #[bits(4)]
-    m_rsvd: u8,
+    pub m_rsvd: u8,
 }
 
 #[bitfield(u32)]
@@ -149,26 +149,26 @@ pub struct IdOaes {
     __: B8,
     #[bits(1, access = RO)]
     /// Namespace Attribute Notices (1.2)
-    oaes_nsan: u8,
+    pub oaes_nsan: u8,
     #[bits(1, access = RO)]
     /// Firmware Activation Notices (1.2)
     #[bits(1, access = RO)]
-    oaes_fwact: u8,
+    pub oaes_fwact: u8,
     #[bits(1)]
     /// oaes_rsvd1
-    oaes_rsvd1: u8,
+    pub oaes_rsvd1: u8,
     #[bits(1, access = RO)]
     /// Asymmetric NS Access Change (1.4)
-    oaes_ansacn: u8,
+    pub oaes_ansacn: u8,
     #[bits(1, access = RO)]
     /// Predictable Lat Event Agg. (1.4)
-    oaes_plat: u8,
+    pub oaes_plat: u8,
     #[bits(1, access = RO)]
     /// LBA Status Information (1.4)
-    oaes_lbasi: u8,
+    pub oaes_lbasi: u8,
     #[bits(1, access = RO)]
     /// Endurance Group Event Agg. (1.4)
-    oaes_egeal: u8,
+    pub oaes_egeal: u8,
     /// oaes_rsvd2
     #[bits(17)]
     __: B17,
@@ -178,34 +178,34 @@ pub struct IdOaes {
 pub struct IdCtratt {
     #[bits(1, access = RO)]
     /// 128-bit Host Identifier (1.2)
-    ctrat_hid: u8,
+    pub ctrat_hid: u8,
     #[bits(1, access = RO)]
     /// Non-Operational Power State (1.3)
-    ctrat_nops: u8,
+    pub ctrat_nops: u8,
     #[bits(1, access = RO)]
     /// NVMe Sets (1.4)
-    ctrat_nvmset: u8,
+    pub ctrat_nvmset: u8,
     #[bits(1, access = RO)]
     /// Read Recovery Levels (1.4)
-    ctrat_rrl: u8,
+    pub ctrat_rrl: u8,
     #[bits(1, access = RO)]
     /// Endurance Groups (1.4)
-    ctrat_engrp: u8,
+    pub ctrat_engrp: u8,
     #[bits(1, access = RO)]
     /// Predictable Latency Mode (1.4)
-    ctrat_plm: u8,
+    pub ctrat_plm: u8,
     #[bits(1, access = RO)]
     /// Traffic Based Keep Alive (1.4)
-    ctrat_tbkas: u8,
+    pub ctrat_tbkas: u8,
     #[bits(1, access = RO)]
     /// Namespace Granularity (1.4)
-    ctrat_nsg: u8,
+    pub ctrat_nsg: u8,
     #[bits(1, access = RO)]
     /// SQ Associations (1.4)
-    ctrat_sqass: u8,
+    pub ctrat_sqass: u8,
     #[bits(1, access = RO)]
     /// UUID List (1.4)
-    ctrat_uuid: u8,
+    pub ctrat_uuid: u8,
     #[bits(22)]
     /// ctrat_rsvd
     __: B22,
@@ -216,10 +216,10 @@ pub struct IdCtratt {
 pub struct IdNvmsr {
     #[bits(1, access = RO)]
     /// NVMe Storage Device
-    nvmsr_nvmesd: u8,
+    pub nvmsr_nvmesd: u8,
     #[bits(1, access = RO)]
     /// NVMe Enclosure
-    nvmsr_nvmee: u8,
+    pub nvmsr_nvmee: u8,
     #[bits(6)]
     /// nvmsr_rsvd
     __: B6,
@@ -230,10 +230,10 @@ pub struct IdNvmsr {
 pub struct IdVpdwc {
     #[bits(7, access = RO)]
     /// Write Cycles Remaining
-    vwci_crem: u8,
+    pub vwci_crem: u8,
     #[bits(1, access = RO)]
     /// Write Cycles Remaining Valid
-    vwci_valid: u8,
+    pub vwci_valid: u8,
 }
 
 #[bitfield(u8)]
@@ -241,10 +241,10 @@ pub struct IdVpdwc {
 pub struct IdMec {
     #[bits(1, access = RO)]
     /// SMBus Port Management Endpoint
-    mec_smbusme: u8,
+    pub mec_smbusme: u8,
     #[bits(1, access = RO)]
     /// PCIe Port Management Endpoint
-    mec_pcieme: u8,
+    pub mec_pcieme: u8,
     #[bits(6)]
     /// mec_rsvd
     __: B6,
@@ -255,34 +255,34 @@ pub struct IdMec {
 pub struct IdOacs {
     #[bits(1, access = RO)]
     /// Security Send & Receive
-    oa_security: u8,
+    pub oa_security: u8,
     #[bits(1, access = RO)]
     /// Format NVM
-    oa_format: u8,
+    pub oa_format: u8,
     #[bits(1, access = RO)]
     /// Firmware Activate & Download
-    oa_firmware: u8,
+    pub oa_firmware: u8,
     #[bits(1, access = RO)]
     /// Namespace Management (1.2)
-    oa_nsmgmt: u8,
+    pub oa_nsmgmt: u8,
     #[bits(1, access = RO)]
     /// Self Test (1.3)
-    oa_selftest: u8,
+    pub oa_selftest: u8,
     #[bits(1, access = RO)]
     /// Directives (1.3)
-    oa_direct: u8,
+    pub oa_direct: u8,
     #[bits(1, access = RO)]
     /// MI-Send/Recv (1.3)
-    oa_nvmemi: u8,
+    pub oa_nvmemi: u8,
     #[bits(1, access = RO)]
     /// Virtualization Management (1.3)
-    oa_virtmgmt: u8,
+    pub oa_virtmgmt: u8,
     #[bits(1, access = RO)]
     /// Doorbell Buffer Config (1.3)
-    oa_doorbell: u8,
+    pub oa_doorbell: u8,
     #[bits(1, access = RO)]
     /// LBA Status (1.4)
-    oa_lbastat: u8,
+    pub oa_lbastat: u8,
     #[bits(6)]
     /// oa_rsvd
     __: B6,
@@ -299,7 +299,7 @@ pub struct IdFrmw {
     pub fw_nslot: u8,
     #[bits(1, access = RO)]
     /// Activate w/o reset (1.2)
-    fw_norst: u8,
+    pub fw_norst: u8,
     #[bits(3)]
     /// fw_rsvd
     __: B3,
@@ -310,19 +310,19 @@ pub struct IdFrmw {
 pub struct IdLpa {
     #[bits(1, access = RO)]
     /// SMART/Health information per NS
-    lp_smart: u8,
+    pub lp_smart: u8,
     #[bits(1, access = RO)]
     /// Command Effects (1.2)
-    lp_cmdeff: u8,
+    pub lp_cmdeff: u8,
     #[bits(1, access = RO)]
     /// Extended Get Log Page (1.2)
-    lp_extsup: u8,
+    pub lp_extsup: u8,
     #[bits(1, access = RO)]
     /// Telemetry Log Pages (1.3)
-    lp_telemetry: u8,
+    pub lp_telemetry: u8,
     #[bits(1, access = RO)]
     /// Persistent Log Page (1.4)
-    lp_persist: u8,
+    pub lp_persist: u8,
     #[bits(3)]
     /// lp_rsvd
     __: B3,
@@ -333,7 +333,7 @@ pub struct IdLpa {
 pub struct IdAvscc {
     #[bits(1, access = RO)]
     /// use format from spec
-    av_spec: u8,
+    pub av_spec: u8,
     #[bits(7)]
     /// av_rsvd
     __: B7,
@@ -344,7 +344,7 @@ pub struct IdAvscc {
 pub struct IdApsta {
     #[bits(1, access = RO)]
     /// APST supported (1.1)
-    ap_sup: u8,
+    pub ap_sup: u8,
     #[bits(7)]
     /// ap_rsvd
     __: B7,
@@ -355,19 +355,19 @@ pub struct IdApsta {
 pub struct ApRpmbs {
     #[bits(3, access = RO)]
     /// Number of targets
-    rpmbs_units: u8,
+    pub rpmbs_units: u8,
     #[bits(3, access = RO)]
     /// Auth method
-    rpmbs_auth: u8,
+    pub rpmbs_auth: u8,
     #[bits(10)]
     /// rpmbs_rsvd
     __: B10,
     #[bits(8, access = RO)]
     /// Total size in 128KB
-    rpmbs_tot: u8,
+    pub rpmbs_tot: u8,
     #[bits(8, access = RO)]
     /// Access size in 512B
-    rpmbs_acc: u8,
+    pub rpmbs_acc: u8,
 }
 
 #[bitfield(u8)]
@@ -375,7 +375,7 @@ pub struct ApRpmbs {
 pub struct ApDsto {
     #[bits(1, access = RO)]
     /// Subsystem level self-test (1.3)
-    dsto_sub: u8,
+    pub dsto_sub: u8,
     #[bits(7)]
     /// dstro_rsvd
     __: B7,
@@ -386,7 +386,7 @@ pub struct ApDsto {
 pub struct ApHctma {
     #[bits(1, access = RO)]
     /// Host Controlled (1.3)
-    hctma_hctm: u8,
+    pub hctma_hctm: u8,
     #[bits(15)]
     /// hctma_rsvd
     __: B15,
@@ -397,22 +397,22 @@ pub struct ApHctma {
 pub struct ApSanitize {
     #[bits(1, access = RO)]
     /// Crypto Erase Support (1.3)
-    san_ces: u8,
+    pub san_ces: u8,
     #[bits(1, access = RO)]
     /// Block Erase Support (1.3)
-    san_bes: u8,
+    pub san_bes: u8,
     #[bits(1, access = RO)]
     /// Overwite Support (1.3)
-    san_ows: u8,
+    pub san_ows: u8,
     #[bits(26)]
     /// san_rsvd
     __: B26,
     #[bits(1, access = RO)]
     /// No-deallocate Inhibited (1.4)
-    san_ndi: u8,
+    pub san_ndi: u8,
     #[bits(2, access = RO)]
     /// No-Deallocate Modifies Media (1.4)
-    san_nodmmas: u8,
+    pub san_nodmmas: u8,
 }
 
 #[bitfield(u8)]
@@ -420,28 +420,28 @@ pub struct ApSanitize {
 pub struct ApAnacap {
     #[bits(1, access = RO)]
     /// Optimized State (1.4)
-    anacap_opt: u8,
+    pub anacap_opt: u8,
     #[bits(1, access = RO)]
     /// Un-optimized State (1.4)
-    anacap_unopt: u8,
+    pub anacap_unopt: u8,
     #[bits(1, access = RO)]
     /// Inaccessible State (1.4)
-    anacap_inacc: u8,
+    pub anacap_inacc: u8,
     #[bits(1, access = RO)]
     /// Persistent Loss (1.4)
-    anacap_ploss: u8,
+    pub anacap_ploss: u8,
     #[bits(1, access = RO)]
     /// Change State (1.4 )
-    anacap_chg: u8,
+    pub anacap_chg: u8,
     #[bits(1)]
     /// anacap_rsvd
     __: B1,
     #[bits(1, access = RO)]
     /// ID Changes with NS Attach (1.4)
-    anacap_grpns: u8,
+    pub anacap_grpns: u8,
     #[bits(1, access = RO)]
     /// Supports Group ID (1.4)
-    anacap_grpid: u8,
+    pub anacap_grpid: u8,
 }
 
 #[bitfield(u16)]
@@ -449,28 +449,28 @@ pub struct ApAnacap {
 pub struct IdOncs {
     #[bits(1, access = RO)]
     /// Compare
-    on_compare: u8,
+    pub on_compare: u8,
     #[bits(1, access = RO)]
     /// Write Uncorrectable
-    on_wr_unc: u8,
+    pub on_wr_unc: u8,
     #[bits(1, access = RO)]
     /// Dataset Management
-    on_dset_mgmt: u8,
+    pub on_dset_mgmt: u8,
     #[bits(1, access = RO)]
     /// Write Zeros (1.1)
-    on_wr_zero: u8,
+    pub on_wr_zero: u8,
     #[bits(1, access = RO)]
     /// Save/Select in Get/Set Feat (1.1)
-    on_save: u8,
+    pub on_save: u8,
     #[bits(1, access = RO)]
     /// Reservations (1.1)
-    on_reserve: u8,
+    pub on_reserve: u8,
     #[bits(1, access = RO)]
     /// Timestamp (1.3)
-    on_ts: u8,
+    pub on_ts: u8,
     #[bits(1, access = RO)]
     /// Verify (1.4)
-    on_verify: u8,
+    pub on_verify: u8,
     #[bits(8)]
     /// on_rsvd
     __: B8,
@@ -481,7 +481,7 @@ pub struct IdOncs {
 pub struct IdFuses {
     #[bits(1, access = RO)]
     /// Compare and Write
-    f_cmp_wr: u8,
+    pub f_cmp_wr: u8,
     #[bits(15)]
     /// f_rsvd
     __: B15,
@@ -492,13 +492,13 @@ pub struct IdFuses {
 pub struct IdFna {
     #[bits(1, access = RO)]
     /// Format applies to all NS
-    fn_format: u8,
+    pub fn_format: u8,
     #[bits(1, access = RO)]
     /// Secure Erase applies to all NS
-    fn_sec_erase: u8,
+    pub fn_sec_erase: u8,
     #[bits(1, access = RO)]
     /// Cryptographic Erase supported
-    fn_crypt_erase: u8,
+    pub fn_crypt_erase: u8,
     #[bits(5)]
     /// fn_rsvd
     __: B5,
@@ -509,10 +509,10 @@ pub struct IdFna {
 pub struct IdVwc {
     #[bits(1, access = RO)]
     /// Volatile Write Cache present
-    vwc_present: u8,
+    pub vwc_present: u8,
     #[bits(2, access = RO)]
     /// Flush with NS ffffffff (1.4)
-    vwc_nsflush: u8,
+    pub vwc_nsflush: u8,
     #[bits(5)]
     /// vwc_rsvd
     __: B5,
@@ -523,7 +523,7 @@ pub struct IdVwc {
 pub struct IdNvscc {
     #[bits(1, access = RO)]
     /// use format from spec
-    nv_spec: u8,
+    pub nv_spec: u8,
     #[bits(7)]
     /// nv_rsvd
     __: B7,
@@ -534,13 +534,13 @@ pub struct IdNvscc {
 pub struct IdNwpc {
     #[bits(1, access = RO)]
     /// Base support (1.4)
-    nwpc_base: u8,
+    pub nwpc_base: u8,
     #[bits(1, access = RO)]
     /// Write prot until power cycle (1.4)
-    nwpc_wpupc: u8,
+    pub nwpc_wpupc: u8,
     #[bits(1, access = RO)]
     /// Permanent write prot (1.4)
-    nwpc_permwp: u8,
+    pub nwpc_permwp: u8,
     #[bits(5)]
     /// nwpc_rsvd
     __: B5,
@@ -551,31 +551,31 @@ pub struct IdNwpc {
 pub struct IdSgls {
     #[bits(2, access = RO)]
     /// SGL Supported in NVM cmds (1.3)
-    sgl_sup: u8,
+    pub sgl_sup: u8,
     #[bits(1, access = RO)]
     /// Keyed SGL Support (1.2)
-    sgl_keyed: u8,
+    pub sgl_keyed: u8,
     #[bits(13)]
     /// sgl_rsvd1
     __: B13,
     #[bits(1, access = RO)]
     /// SGL Bit Bucket supported (1.1)
-    sgl_bucket: u8,
+    pub sgl_bucket: u8,
     #[bits(1, access = RO)]
     /// SGL Byte Aligned (1.2)
-    sgl_balign: u8,
+    pub sgl_balign: u8,
     #[bits(1, access = RO)]
     /// SGL Length Longer than Data (1.2)
-    sgl_sglgtd: u8,
+    pub sgl_sglgtd: u8,
     #[bits(1, access = RO)]
     /// SGL MPTR w/ SGL (1.2)
-    sgl_mptr: u8,
+    pub sgl_mptr: u8,
     #[bits(1, access = RO)]
     /// SGL Address is offset (1.2)
-    sgl_offset: u8,
+    pub sgl_offset: u8,
     #[bits(1, access = RO)]
     /// Transport SGL Data Block (1.4)
-    sgl_tport: u8,
+    pub sgl_tport: u8,
     #[bits(10)]
     /// sgl_rsvd2
     __: B10,
