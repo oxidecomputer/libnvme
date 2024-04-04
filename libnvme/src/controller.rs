@@ -178,11 +178,11 @@ impl<'a> Controller<'a> {
             "failed to execute firmware log request"
         })?;
 
-        let info = self.get_info()?;
-        let identify = info.get_controller_info_identify();
-        let nslots = unsafe { (*identify).id_frmw.fw_nslot() };
-        let readonly = unsafe { (*identify).id_frmw.fw_readonly() };
-        println!("number of slots {nslots} and is readonly {readonly}");
+        // let info = self.get_info()?;
+        // let identify = info.get_controller_info_identify();
+        // let nslots = unsafe { (*identify).id_frmw.fw_nslot() };
+        // let readonly = unsafe { (*identify).id_frmw.fw_readonly() };
+        // println!("number of slots {nslots} and is readonly {readonly}");
 
         // Our request was successful so we can assume this struct has been
         // populated now.

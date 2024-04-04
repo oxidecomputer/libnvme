@@ -6,13 +6,6 @@ use std::ffi::CString;
 
 use libnvme_sys::nvme::*;
 
-// struct Logpage<T> {
-//     buf: Vec<T>,
-//     len: usize,
-//     disc: *mut nvme_log_disc_t,
-//     req: *mut nvme_log_req_t,
-// }
-
 #[derive(Debug, Clone)]
 pub enum FirmwareSlot {
     Empty,
