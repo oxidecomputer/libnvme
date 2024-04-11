@@ -1,6 +1,7 @@
 use std::ffi::c_char;
 
 use bitfield_struct::bitfield;
+// use static_assertions as sa;
 
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
@@ -584,7 +585,7 @@ pub struct IdSgls {
 /// NVMe Identify Controller Data Structure
 #[repr(C)]
 #[derive(Debug, Clone)]
-pub struct nvme_identify_ctrl_t {
+pub struct nvme_identify_ctrl {
     /* Controller Capabilities & Features */
     pub id_vid: u16,                         /* PCI vendor ID */
     pub id_ssvid: u16,                       /* PCI subsystem vendor ID */
@@ -685,16 +686,6 @@ pub struct nvme_identify_ctrl_t {
     pub id_vs: [u8; 1024],
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn nvme_identify_ctrl_t_size() {
-        // $ mdb /usr/lib/amd64/libnvme.so
-        // > ::sizeof nvme_identify_ctrl_t
-        // sizeof (nvme_identify_ctrl_t) = 0x1000
-        assert_eq!(
-            0x1000,
-            std::mem::size_of::<crate::identify::nvme_identify_ctrl_t>()
-        );
-    }
-}
+// XXX static_assertions breaks ctest2.
+// Assert that we match the size of nvme_identify_ctrl_t from libnvme.
+// sa::assert_eq_size!([u8; 4096], nvme_identify_ctrl);

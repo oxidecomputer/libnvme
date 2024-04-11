@@ -7,12 +7,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let discovery = nvme.controller_discovery()?;
 
     for controller in discovery.into_iter() {
-        let firmware = controller?.get_firmware()?;
-        println!("{}", firmware.active_slot);
-        println!("{:?}", firmware.next_active_slot);
-        println!("{:#?}", firmware.firmware_slots);
-
-        println!("");
+        let controller = controller?;
+        let firmware = controller.get_firmware()?;
+        println!("{firmware:#?}");
     }
 
     Ok(())

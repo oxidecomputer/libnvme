@@ -2,9 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::{borrow::Cow, ffi::CStr};
+use std::{borrow::Cow, ffi::CStr, marker::PhantomData};
 
-use libnvme_sys::{identify::nvme_identify_ctrl_t, nvme::*};
+use libnvme_sys::nvme::*;
 use thiserror::Error;
 
 use crate::{
@@ -65,6 +65,11 @@ impl NvmeInfoErrorCode {
     }
 }
 
+pub(crate) struct ControllerInfoIdentify<'a> {
+    pub(crate) inner: *const nvme_identify_ctrl_t,
+    _phantom: PhantomData<&'a ControllerInfo>,
+}
+
 pub struct ControllerInfo(*mut nvme_ctrl_info_t);
 
 impl FfiPtr for ControllerInfo {
@@ -84,11 +89,13 @@ impl Drop for ControllerInfo {
 impl ControllerInfo {
     // Private to the crate for now until it's determined to be useful to
     // consumers.
-    // XXX return a reference that you can clone?
     pub(crate) fn get_controller_info_identify(
         &self,
-    ) -> *const nvme_identify_ctrl_t {
-        unsafe { nvme_ctrl_info_identify(self.0) }
+    ) -> ControllerInfoIdentify<'_> {
+        ControllerInfoIdentify {
+            inner: unsafe { nvme_ctrl_info_identify(self.0) },
+            _phantom: PhantomData,
+        }
     }
 
     pub fn model(&self) -> Cow<'_, str> {
