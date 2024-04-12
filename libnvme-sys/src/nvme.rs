@@ -334,6 +334,12 @@ extern "C" {
         arg2: *mut c_void,
         arg3: usize,
     ) -> bool;
+    pub fn nvme_log_disc_calc_size(
+        arg1: *const nvme_log_disc_t,
+        arg2: *mut u64,
+        arg3: *const c_void,
+        arg4: usize,
+    ) -> bool;
     pub fn nvme_log_req_exec(arg1: *mut nvme_log_req_t) -> bool;
     pub fn nvme_log_disc_free(arg1: *mut nvme_log_disc_t);
     pub fn nvme_log_req_fini(arg1: *mut nvme_log_req_t);

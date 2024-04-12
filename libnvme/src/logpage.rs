@@ -10,6 +10,8 @@ use crate::{controller::Controller, error::LibraryError, NvmeError};
 
 pub(crate) struct NvmeLogReq<'a> {
     pub(crate) inner: *mut nvme_log_req_t,
+    // The log page being requested
+    pub(crate) page_name: LogPageName,
     // This is the `Controller` the log request was created from.
     _phantom: PhantomData<&'a ()>,
 }
@@ -55,11 +57,52 @@ impl LogPageName {
     }
 }
 
-fn get_logpage_size(disc: &NvmeLogDisc<'_>, _req: &NvmeLogReq<'_>) -> usize {
+fn get_logpage_size(
+    controller: &Controller<'_>,
+    disc: &NvmeLogDisc<'_>,
+    req: &NvmeLogReq<'_>,
+) -> Result<usize, NvmeError> {
     let mut len = 0;
     match unsafe { nvme_log_disc_size(disc.inner, &mut len) } {
-        NVME_LOG_SIZE_K_FIXED => len as usize,
-        _ => todo!("variable length log page found"),
+        NVME_LOG_SIZE_K_FIXED => Ok(len as usize),
+        _ => {
+            // We have a log page with variable length. We need to determine the
+            // actual size.
+            let mut size_needed = 0;
+            let mut buf = Vec::with_capacity(len as usize);
+            controller.check_result(
+                unsafe {
+                    nvme_log_req_set_output(
+                        req.inner,
+                        buf.as_mut_ptr(),
+                        len as usize,
+                    )
+                },
+                || format!("failed to set output parameters to determine log length for {:?}", req.page_name),
+            )?;
+            controller.check_result(
+                unsafe { nvme_log_req_exec(req.inner) },
+                || format!("failed to execute log request to determine log length for {:?}", req.page_name),
+            )?;
+            controller.check_result(
+                unsafe {
+                    nvme_log_disc_calc_size(
+                        disc.inner,
+                        &mut size_needed,
+                        buf.as_mut_ptr(),
+                        len as usize,
+                    )
+                },
+                || {
+                    format!(
+                        "failed to determine full log page length for {:?}",
+                        req.page_name
+                    )
+                },
+            )?;
+
+            Ok(size_needed as usize)
+        }
     }
 }
 
@@ -85,8 +128,12 @@ impl<'a> Controller<'a> {
         )?;
 
         let disc = NvmeLogDisc { inner: disc_ptr, _phantom: PhantomData };
-        let req = NvmeLogReq { inner: req_ptr, _phantom: PhantomData };
-        let size = get_logpage_size(&disc, &req);
+        let req = NvmeLogReq {
+            inner: req_ptr,
+            page_name: name,
+            _phantom: PhantomData,
+        };
+        let size = get_logpage_size(self, &disc, &req)?;
 
         Ok(LogPageInfo { size, _disc: disc, req })
     }

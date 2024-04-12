@@ -12,7 +12,7 @@ use thiserror::Error;
 pub mod controller;
 pub mod controller_info;
 mod error;
-mod firmware;
+pub mod firmware;
 mod lba;
 mod logpage;
 pub mod namespace;
