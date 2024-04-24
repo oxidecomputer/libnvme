@@ -23,7 +23,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let lba = info
                 .lba_formats()
-                .into_iter()
                 .collect::<Result<Vec<_>, _>>()?
                 .into_iter()
                 .find(|lba| lba.meta_size() == 0 && lba.data_size() == 512)

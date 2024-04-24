@@ -8,7 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for controller in discovery.into_iter() {
         let controller = controller?;
-        let firmware = controller.get_firmware()?;
+        let firmware = controller.get_firmware_log_page()?;
         let slots = firmware.slot_iter().collect::<Vec<_>>();
         println!("{slots:#?}");
     }

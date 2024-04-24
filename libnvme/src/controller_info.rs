@@ -67,6 +67,8 @@ impl NvmeInfoErrorCode {
 
 pub(crate) struct ControllerInfoIdentify<'a> {
     pub(crate) inner: *const nvme_identify_ctrl_t,
+    // Note this type does not have a drop method as the data comes from the
+    // `ControllerInfo` itself.
     _phantom: PhantomData<&'a ControllerInfo>,
 }
 

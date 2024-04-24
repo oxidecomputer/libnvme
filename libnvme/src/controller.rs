@@ -40,7 +40,7 @@ impl<'a> Controller<'a> {
         let mut ctrl_info: *mut nvme_ctrl_info_t = std::ptr::null_mut();
         self.check_result(
             unsafe { nvme_ctrl_info_snap(self.inner, &mut ctrl_info) },
-            || "failed to get controller snapshot",
+            || "failed to get controller info snapshot",
         )
         .map(|_| unsafe { ControllerInfo::from_raw(ctrl_info) })
     }
