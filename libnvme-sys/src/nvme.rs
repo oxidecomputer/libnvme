@@ -232,6 +232,11 @@ extern "C" {
         arg2: *mut di_node,
         arg3: *mut *mut nvme_ctrl_t,
     ) -> bool;
+    pub fn nvme_ctrl_init_by_instance(
+        arg1: *mut nvme_t,
+        arg2: i32,
+        arg3: *mut *mut nvme_ctrl_t,
+    ) -> bool;
     pub fn nvme_ctrl_fini(arg1: *mut nvme_ctrl_t);
 
     // NVMe Controller information. Information about a controller is a

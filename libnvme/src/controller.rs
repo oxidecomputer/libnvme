@@ -36,6 +36,22 @@ pub struct Controller<'a> {
 }
 
 impl<'a> Controller<'a> {
+    /// Initialize a `Controller` from an instance.
+    pub fn init_by_instance(
+        nvme: &'a Nvme,
+        instance: i32,
+    ) -> Result<Self, NvmeError> {
+        let mut controller = std::ptr::null_mut();
+        nvme.check_result(
+            unsafe {
+                nvme_ctrl_init_by_instance(nvme.0, instance, &mut controller)
+            },
+            || format!("failed to get controller for instance {instance}"),
+        )?;
+
+        Ok(Self { inner: controller, _nvme: nvme })
+    }
+
     pub fn get_info(&self) -> Result<ControllerInfo, NvmeError> {
         let mut ctrl_info: *mut nvme_ctrl_info_t = std::ptr::null_mut();
         self.check_result(
