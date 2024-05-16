@@ -26,6 +26,20 @@ pub enum NvmeSlotError {
 /// NVMe Slot Number.
 pub struct NvmeSlot(u32);
 
+// Rust's default interger type is `i32`.
+impl TryFrom<i32> for NvmeSlot {
+    type Error = NvmeSlotError;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            1..=7 => Ok(NvmeSlot(value as u32)),
+            // XXX maybe we should map the error to something not lossy?
+            invalid => Err(NvmeSlotError::InvalidSlotNumber(invalid as u32)),
+        }
+    }
+}
+
+// Setting a slot via `nvme_fw_commit_req_set_slot` uses a `u32`.
 impl TryFrom<u32> for NvmeSlot {
     type Error = NvmeSlotError;
 
@@ -37,6 +51,7 @@ impl TryFrom<u32> for NvmeSlot {
     }
 }
 
+// The NVMe spec currently uses a u8 for active and next active slots.
 impl TryFrom<u8> for NvmeSlot {
     type Error = NvmeSlotError;
 
