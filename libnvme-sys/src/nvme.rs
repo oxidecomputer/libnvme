@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// use static_assertions as sa;
 use bitfield_struct::bitfield;
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
@@ -177,9 +176,6 @@ pub struct nvme_fwslot_log_t {
     pub fw_frs: [[c_char; NVME_FWVER_SZ]; 7],
     _reserved2: [u8; 512 - 64],
 }
-// XXX static_assertions breaks ctest2.
-// Assert that nvme_fwslot_log_t is the same size as found in libnvme.
-// sa::assert_eq_size!([u8; 512], nvme_fwslot_log_t);
 
 opaque_type!(nvme, nvme_t);
 opaque_type!(nvme_ctrl_iter, nvme_ctrl_iter_t);

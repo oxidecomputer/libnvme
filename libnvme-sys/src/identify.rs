@@ -1,7 +1,6 @@
 use std::ffi::c_char;
 
 use bitfield_struct::bitfield;
-// use static_assertions as sa;
 
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
@@ -685,7 +684,3 @@ pub struct nvme_identify_ctrl {
     /* Vendor Specific */
     pub id_vs: [u8; 1024],
 }
-
-// XXX static_assertions breaks ctest2.
-// Assert that we match the size of nvme_identify_ctrl_t from libnvme.
-// sa::assert_eq_size!([u8; 4096], nvme_identify_ctrl);
