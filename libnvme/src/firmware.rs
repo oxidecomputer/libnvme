@@ -14,7 +14,7 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum NvmeSlotError {
     #[error("NVMe slots must be between 1 and 7 but got {0}")]
-    InvalidSlotNumber(u32),
+    InvalidSlotNumber(usize),
     #[error("NVMe device does not have slot {0}")]
     DoesNotExisit(u32),
     #[error("libnvme error: {0}")]
@@ -33,8 +33,7 @@ impl TryFrom<i32> for NvmeSlot {
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
             1..=7 => Ok(NvmeSlot(value as u32)),
-            // XXX maybe we should map the error to something not lossy?
-            invalid => Err(NvmeSlotError::InvalidSlotNumber(invalid as u32)),
+            invalid => Err(NvmeSlotError::InvalidSlotNumber(invalid as _)),
         }
     }
 }
@@ -46,7 +45,7 @@ impl TryFrom<u32> for NvmeSlot {
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
             1..=7 => Ok(NvmeSlot(value)),
-            invalid => Err(NvmeSlotError::InvalidSlotNumber(invalid)),
+            invalid => Err(NvmeSlotError::InvalidSlotNumber(invalid as _)),
         }
     }
 }
@@ -98,7 +97,7 @@ impl FirmwareLogPage {
             unsafe { (*identify.inner).id_frmw.fw_nslot() } as usize;
         let mut firmware_slots = Vec::with_capacity(number_of_slots);
         for slot in &logpage.fw_frs[..number_of_slots] {
-            // XXX there's probably a better way to do this? Basically the
+            // FIXME there's probably a better way to do this? Basically the
             // strings are packed into an array without a nul byte unless the
             // slot itself is empty so we can't depend on `CStr::from_ptr()`.
             // Instead we have to take each slice of bytes and convert it into a
@@ -150,6 +149,7 @@ impl FirmwareLogPage {
 }
 
 impl<'a> Controller<'a> {
+    /// Get the controller's firmware log page.
     pub fn get_firmware_log_page(&self) -> Result<FirmwareLogPage, NvmeError> {
         let LogPageInfo { size, req, .. } =
             self.get_logpage(LogPageName::Firmware)?;
@@ -179,6 +179,10 @@ impl<'a> Controller<'a> {
 }
 
 impl<'ctrl> WriteLockedController<'ctrl> {
+    /// Upload new firmware to the NVMe controller.
+    ///
+    /// Note this firmware needs to be commited to a slot via
+    /// `FirmwareCommitRequestBuilder`.
     pub fn firmware_load(&self, data: &[u8]) -> Result<(), NvmeError> {
         self.check_result(
             unsafe {
@@ -186,7 +190,11 @@ impl<'ctrl> WriteLockedController<'ctrl> {
                     self.inner,
                     data.as_ptr() as *const _,
                     data.len(),
-                    // XXX do we need to provide the offset?
+                    // FIXME today we expect the entire firmware blob as a
+                    // single `&[u8]` but in the future we may want to accept
+                    // something that implements `io::Read` and upload chunks
+                    // via the offset.  Firmware seems small enough that we
+                    // don't need this capability today.
                     0,
                 )
             },
@@ -194,6 +202,8 @@ impl<'ctrl> WriteLockedController<'ctrl> {
         )
     }
 
+    /// Returns a new `FirmwareCommitRequestBuilder` that can be used to commit
+    /// uploaded firmware to a particular NVMe slot.
     pub fn firmware_commit_request(
         &self,
     ) -> Result<FirmwareCommitRequestBuilder<'_>, NvmeError> {
@@ -216,6 +226,8 @@ pub enum FirmwareCommitAction {
     /// Activate slot at next reset.
     Activate,
     /// Activate slot immediately.
+    ///
+    /// Note: illumos does not support this today.
     ActivateImmediately,
 }
 
@@ -244,6 +256,7 @@ impl<'ctrl> Drop for FirmwareCommitRequestBuilder<'ctrl> {
 }
 
 impl<'ctrl> FirmwareCommitRequestBuilder<'ctrl> {
+    /// Set the NVMe slot the firmware is going to be commited to.
     pub fn set_slot<S>(self, slot: S) -> Result<Self, NvmeSlotError>
     where
         S: TryInto<NvmeSlot>,
@@ -264,6 +277,7 @@ impl<'ctrl> FirmwareCommitRequestBuilder<'ctrl> {
             .map(|_| self)
     }
 
+    /// Set the commit action.
     pub fn set_action(
         self,
         action: FirmwareCommitAction,
@@ -282,6 +296,7 @@ impl<'ctrl> FirmwareCommitRequestBuilder<'ctrl> {
             .map(|_| self)
     }
 
+    /// Execute a firmware commit request.
     pub fn execute(self) -> Result<(), NvmeError> {
         self.controller
             .check_result(unsafe { nvme_fw_commit_req_exec(self.req) }, || {

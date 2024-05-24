@@ -684,3 +684,17 @@ pub struct nvme_identify_ctrl {
     /* Vendor Specific */
     pub id_vs: [u8; 1024],
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn nvme_identify_ctrl_t_size() {
+        // $ mdb /usr/lib/amd64/libnvme.so
+        // > ::sizeof nvme_identify_ctrl_t
+        // sizeof (nvme_identify_ctrl_t) = 0x1000
+        assert_eq!(
+            0x1000,
+            std::mem::size_of::<crate::identify::nvme_identify_ctrl>()
+        );
+    }
+}
