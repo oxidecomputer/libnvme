@@ -14,7 +14,7 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum NvmeSlotError {
     #[error("NVMe slots must be between 1 and 7 but got {0}")]
-    InvalidSlotNumber(usize),
+    InvalidSlotNumber(u32),
     #[error("NVMe device does not have slot {0}")]
     DoesNotExisit(u32),
     #[error("libnvme error: {0}")]
@@ -26,18 +26,6 @@ pub enum NvmeSlotError {
 /// NVMe Slot Number.
 pub struct NvmeSlot(u32);
 
-// Rust's default interger type is `i32`.
-impl TryFrom<i32> for NvmeSlot {
-    type Error = NvmeSlotError;
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            1..=7 => Ok(NvmeSlot(value as u32)),
-            invalid => Err(NvmeSlotError::InvalidSlotNumber(invalid as _)),
-        }
-    }
-}
-
 // Setting a slot via `nvme_fw_commit_req_set_slot` uses a `u32`.
 impl TryFrom<u32> for NvmeSlot {
     type Error = NvmeSlotError;
@@ -45,19 +33,7 @@ impl TryFrom<u32> for NvmeSlot {
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
             1..=7 => Ok(NvmeSlot(value)),
-            invalid => Err(NvmeSlotError::InvalidSlotNumber(invalid as _)),
-        }
-    }
-}
-
-// The NVMe spec currently uses a u8 for active and next active slots.
-impl TryFrom<u8> for NvmeSlot {
-    type Error = NvmeSlotError;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            1..=7 => Ok(NvmeSlot(value as _)),
-            invalid => Err(NvmeSlotError::InvalidSlotNumber(invalid as _)),
+            invalid => Err(NvmeSlotError::InvalidSlotNumber(invalid)),
         }
     }
 }
@@ -126,15 +102,13 @@ impl FirmwareLogPage {
     /// Get the firmware version for a particular slot.
     ///
     /// Note that the NVMe spec allows for slots 1 - 7.
-    pub fn get_slot<S>(&self, slot: S) -> Result<Option<&String>, NvmeSlotError>
-    where
-        S: TryInto<NvmeSlot>,
-        S::Error: Into<NvmeSlotError>,
-    {
-        let slot = slot.try_into().map_err(Into::into)?;
+    pub fn get_slot(
+        &self,
+        slot: NvmeSlot,
+    ) -> Result<Option<&str>, NvmeSlotError> {
         // We subtract 1 because our internal mapping is 0 indexed.
         match self.firmware_slots.get(slot.0 as usize - 1) {
-            Some(slot) => Ok(slot.as_ref()),
+            Some(slot) => Ok(slot.as_deref()),
             None => Err(NvmeSlotError::DoesNotExisit(slot.0)),
         }
     }
@@ -143,8 +117,20 @@ impl FirmwareLogPage {
     ///
     /// The iterator yields a `Some(String)` if the slot has a firmware version
     /// commited otherwise it yeilds `None`.
-    pub fn slot_iter(&self) -> impl Iterator<Item = Option<&String>> {
-        self.firmware_slots.iter().map(|o| o.as_ref())
+    pub fn slot_iter(&self) -> ControllerFirmwareSlotIter<'_> {
+        ControllerFirmwareSlotIter { iter: self.firmware_slots.iter() }
+    }
+}
+
+pub struct ControllerFirmwareSlotIter<'a> {
+    iter: <&'a Vec<Option<String>> as IntoIterator>::IntoIter,
+}
+
+impl<'a> Iterator for ControllerFirmwareSlotIter<'a> {
+    type Item = Option<&'a str>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|o| o.as_deref())
     }
 }
 
@@ -218,30 +204,18 @@ impl<'ctrl> WriteLockedController<'ctrl> {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[repr(u32)]
 pub enum FirmwareCommitAction {
     ///  Save image only.
-    Save,
+    Save = NVME_FWC_SAVE,
     /// Save and activate at next reset.
-    SaveActivate,
+    SaveActivate = NVME_FWC_SAVE_ACTIVATE,
     /// Activate slot at next reset.
-    Activate,
+    Activate = NVME_FWC_ACTIVATE,
     /// Activate slot immediately.
     ///
     /// Note: illumos does not support this today.
-    ActivateImmediately,
-}
-
-impl From<FirmwareCommitAction> for u32 {
-    fn from(value: FirmwareCommitAction) -> Self {
-        match value {
-            FirmwareCommitAction::Save => NVME_FWC_SAVE,
-            FirmwareCommitAction::SaveActivate => NVME_FWC_SAVE_ACTIVATE,
-            FirmwareCommitAction::Activate => NVME_FWC_ACTIVATE,
-            FirmwareCommitAction::ActivateImmediately => {
-                NVME_FWC_ACTIVATE_IMMED
-            }
-        }
-    }
+    ActivateImmediately = NVME_FWC_ACTIVATE_IMMED,
 }
 
 pub struct FirmwareCommitRequestBuilder<'ctrl> {
@@ -257,12 +231,7 @@ impl<'ctrl> Drop for FirmwareCommitRequestBuilder<'ctrl> {
 
 impl<'ctrl> FirmwareCommitRequestBuilder<'ctrl> {
     /// Set the NVMe slot the firmware is going to be commited to.
-    pub fn set_slot<S>(self, slot: S) -> Result<Self, NvmeSlotError>
-    where
-        S: TryInto<NvmeSlot>,
-        S::Error: Into<NvmeSlotError>,
-    {
-        let slot = slot.try_into().map_err(|e| e.into())?;
+    pub fn set_slot(self, slot: NvmeSlot) -> Result<Self, NvmeError> {
         self.controller
             .check_result(
                 unsafe { nvme_fw_commit_req_set_slot(self.req, slot.0) },
@@ -273,7 +242,6 @@ impl<'ctrl> FirmwareCommitRequestBuilder<'ctrl> {
                     )
                 },
             )
-            .map_err(|e| e.into())
             .map(|_| self)
     }
 

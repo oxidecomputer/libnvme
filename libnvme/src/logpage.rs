@@ -13,7 +13,7 @@ pub(crate) struct NvmeLogReq<'a> {
     // The log page being requested
     pub(crate) page_name: LogPageName,
     // This is the `Controller` the log request was created from.
-    _phantom: PhantomData<&'a ()>,
+    _phantom: PhantomData<&'a Controller<'a>>,
 }
 
 impl<'a> Drop for NvmeLogReq<'a> {
@@ -25,7 +25,7 @@ impl<'a> Drop for NvmeLogReq<'a> {
 pub(crate) struct NvmeLogDisc<'a> {
     pub(crate) inner: *mut nvme_log_disc_t,
     // This is the `Controller` the log disc was created from.
-    _phantom: PhantomData<&'a ()>,
+    _phantom: PhantomData<&'a Controller<'a>>,
 }
 
 impl<'a> Drop for NvmeLogDisc<'a> {
@@ -36,7 +36,6 @@ impl<'a> Drop for NvmeLogDisc<'a> {
 
 pub(crate) struct LogPageInfo<'a> {
     pub(crate) size: usize,
-    _disc: NvmeLogDisc<'a>,
     pub(crate) req: NvmeLogReq<'a>,
 }
 
@@ -135,6 +134,6 @@ impl<'a> Controller<'a> {
         };
         let size = get_logpage_size(self, &disc, &req)?;
 
-        Ok(LogPageInfo { size, _disc: disc, req })
+        Ok(LogPageInfo { size, req })
     }
 }
