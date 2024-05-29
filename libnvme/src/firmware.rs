@@ -1,4 +1,5 @@
-use std::{ffi::CString, mem::MaybeUninit};
+use core::slice;
+use std::mem::{self, MaybeUninit};
 
 use libnvme_sys::nvme::*;
 use thiserror::Error;
@@ -14,23 +15,20 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum NvmeSlotError {
     #[error("NVMe slots must be between 1 and 7 but got {0}")]
-    InvalidSlotNumber(u32),
+    InvalidSlotNumber(u8),
     #[error("NVMe device does not have slot {0}")]
-    DoesNotExisit(u32),
+    DoesNotExisit(u8),
     #[error("libnvme error: {0}")]
     NvmeError(#[from] NvmeError),
 }
 
-// NOTE: we represent this is a u32 because `nvme_fw_commit_req_set_slot` takes
-// a uint32_t as the spec may change in the future to add additional slots.
-/// NVMe Slot Number.
-pub struct NvmeSlot(u32);
+pub struct NvmeSlot(u8);
 
 // Setting a slot via `nvme_fw_commit_req_set_slot` uses a `u32`.
-impl TryFrom<u32> for NvmeSlot {
+impl TryFrom<u8> for NvmeSlot {
     type Error = NvmeSlotError;
 
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             1..=7 => Ok(NvmeSlot(value)),
             invalid => Err(NvmeSlotError::InvalidSlotNumber(invalid)),
@@ -48,8 +46,8 @@ pub struct FirmwareLogPage {
     /// Slot 1 is read-only.
     pub slot1_is_read_only: bool,
     /// The number of firmware slots the controller has.
-    pub number_of_slots: usize,
-    firmware_slots: Vec<Option<String>>,
+    pub number_of_slots: u8,
+    firmware_slot_versions: Vec<Option<String>>,
 }
 
 impl FirmwareLogPage {
@@ -66,27 +64,28 @@ impl FirmwareLogPage {
         // Controller Level Reset."
         let next_active_slot = match logpage.bitfield1.fw_next() {
             0 => None,
+            // BUG: fix the saturating sub
             slot => Some(slot.saturating_sub(1)),
         };
 
-        let number_of_slots =
-            unsafe { (*identify.inner).id_frmw.fw_nslot() } as usize;
-        let mut firmware_slots = Vec::with_capacity(number_of_slots);
-        for slot in &logpage.fw_frs[..number_of_slots] {
-            // FIXME there's probably a better way to do this? Basically the
-            // strings are packed into an array without a nul byte unless the
-            // slot itself is empty so we can't depend on `CStr::from_ptr()`.
-            // Instead we have to take each slice of bytes and convert it into a
-            // CString checking if the first byte is nul along the way.
-            let bytes: Vec<u8> = slot.iter().map(|&x| x as u8).collect();
-            if bytes[0] == b'\0' {
+        let number_of_slots = unsafe { (*identify.inner).id_frmw.fw_nslot() };
+        let nslots = usize::from(number_of_slots);
+        let mut firmware_slots = Vec::with_capacity(nslots);
+        for slot in &logpage.fw_frs[..nslots] {
+            // The version strings are packed into an array without a nul
+            // byte unless the slot itself is empty so we can't depend on
+            // `CStr::from_ptr()`. Instead we have to take each slice of bytes
+            // and check if the first byte is nul along the way.
+            let u8slot = unsafe {
+                slice::from_raw_parts(slot.as_ptr().cast::<u8>(), slot.len())
+            };
+            if u8slot[0] == b'\0' {
                 firmware_slots.push(None);
                 continue;
             }
-            let cstring = unsafe { CString::from_vec_unchecked(bytes) };
             // NVMe Spec: "The firmware revision is indicated as an ASCII
             // string."
-            let firmware = cstring.to_string_lossy().trim().to_string();
+            let firmware = String::from_utf8_lossy(u8slot).trim().to_string();
             firmware_slots.push(Some(firmware));
         }
 
@@ -95,19 +94,19 @@ impl FirmwareLogPage {
             next_active_slot,
             slot1_is_read_only,
             number_of_slots,
-            firmware_slots,
+            firmware_slot_versions: firmware_slots,
         }
     }
 
     /// Get the firmware version for a particular slot.
     ///
     /// Note that the NVMe spec allows for slots 1 - 7.
-    pub fn get_slot(
+    pub fn get_slot_version(
         &self,
         slot: NvmeSlot,
     ) -> Result<Option<&str>, NvmeSlotError> {
         // We subtract 1 because our internal mapping is 0 indexed.
-        match self.firmware_slots.get(slot.0 as usize - 1) {
+        match self.firmware_slot_versions.get(usize::from(slot.0) - 1) {
             Some(slot) => Ok(slot.as_deref()),
             None => Err(NvmeSlotError::DoesNotExisit(slot.0)),
         }
@@ -118,7 +117,7 @@ impl FirmwareLogPage {
     /// The iterator yields a `Some(String)` if the slot has a firmware version
     /// commited otherwise it yeilds `None`.
     pub fn slot_iter(&self) -> ControllerFirmwareSlotIter<'_> {
-        ControllerFirmwareSlotIter { iter: self.firmware_slots.iter() }
+        ControllerFirmwareSlotIter { iter: self.firmware_slot_versions.iter() }
     }
 }
 
@@ -134,19 +133,40 @@ impl<'a> Iterator for ControllerFirmwareSlotIter<'a> {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum FirmwareLogPageError {
+    #[error("libnvme error: {0}")]
+    NvmeError(#[from] NvmeError),
+    #[error(
+        "libnvme says the log page is {} bytes but it should be {} bytes",
+        size,
+        expected_size
+    )]
+    UnexpectedSize { size: usize, expected_size: usize },
+}
+
 impl<'a> Controller<'a> {
     /// Get the controller's firmware log page.
-    pub fn get_firmware_log_page(&self) -> Result<FirmwareLogPage, NvmeError> {
+    pub fn get_firmware_log_page(
+        &self,
+    ) -> Result<FirmwareLogPage, FirmwareLogPageError> {
+        let expected_size = mem::size_of::<nvme_fwslot_log_t>();
         let LogPageInfo { size, req, .. } =
             self.get_logpage(LogPageName::Firmware)?;
-        // TODO the size of nvme_fwslot_log_t should always match the size
-        // returned from get_logpage. We may want a custom error type here if
-        // that's not true. Although for now libnvme should error if we give it
-        // something too small.
+        if size != expected_size {
+            return Err(FirmwareLogPageError::UnexpectedSize {
+                size,
+                expected_size,
+            });
+        }
         let mut buf = MaybeUninit::<nvme_fwslot_log_t>::zeroed();
         self.check_result(
             unsafe {
-                nvme_log_req_set_output(req.inner, buf.as_mut_ptr() as _, size)
+                nvme_log_req_set_output(
+                    req.inner,
+                    buf.as_mut_ptr().cast(),
+                    size,
+                )
             },
             || format!("failed to set logpage req size to {size}"),
         )?;
@@ -174,7 +194,7 @@ impl<'ctrl> WriteLockedController<'ctrl> {
             unsafe {
                 nvme_fw_load(
                     self.inner,
-                    data.as_ptr() as *const _,
+                    data.as_ptr().cast(),
                     data.len(),
                     // FIXME today we expect the entire firmware blob as a
                     // single `&[u8]` but in the future we may want to accept
@@ -234,7 +254,9 @@ impl<'ctrl> FirmwareCommitRequestBuilder<'ctrl> {
     pub fn set_slot(self, slot: NvmeSlot) -> Result<Self, NvmeError> {
         self.controller
             .check_result(
-                unsafe { nvme_fw_commit_req_set_slot(self.req, slot.0) },
+                unsafe {
+                    nvme_fw_commit_req_set_slot(self.req, u32::from(slot.0))
+                },
                 || {
                     format!(
                         "failed to set firmware commit request slot to {}",
