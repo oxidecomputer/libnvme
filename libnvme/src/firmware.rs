@@ -6,11 +6,11 @@ use libnvme_sys::nvme::*;
 use thiserror::Error;
 
 use crate::{
-    controller::{Controller, WriteLockedController},
+    controller::{Controller, NvmeControllerError, WriteLockedController},
     controller_info::ControllerInfoIdentify,
     error::LibraryError,
     logpage::{LogPageInfo, LogPageName},
-    NvmeError,
+    NvmeError, NvmeErrorCode,
 };
 
 #[derive(Debug, Error)]
@@ -23,6 +23,7 @@ pub enum NvmeSlotError {
     NvmeError(#[from] NvmeError),
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub struct NvmeSlot(u8);
 
 // Setting a slot via `nvme_fw_commit_req_set_slot` uses a `u32`.
@@ -136,7 +137,7 @@ impl<'a> Iterator for ControllerFirmwareSlotIter<'a> {
 #[derive(Debug, Error)]
 pub enum FirmwareLogPageError {
     #[error("libnvme error: {0}")]
-    NvmeError(#[from] NvmeError),
+    ControllerError(#[from] NvmeControllerError),
     #[error(
         "libnvme says the log page is {} bytes but it should be {} bytes",
         size,
@@ -188,6 +189,8 @@ impl<'a> Controller<'a> {
 pub enum FirmwareLoadError {
     #[error("{0}")]
     Nvme(#[from] NvmeError),
+    #[error("{0}")]
+    NvmeController(#[from] NvmeControllerError),
     #[error("Failed to upload firmware: {0}")]
     IoError(#[from] std::io::Error),
     #[error("XXX overflowed")]
@@ -200,7 +203,7 @@ impl<'ctrl> WriteLockedController<'ctrl> {
         &self,
         data: &[u8],
         offset: u64,
-    ) -> Result<(), NvmeError> {
+    ) -> Result<(), NvmeControllerError> {
         self.check_result(
             unsafe {
                 nvme_fw_load(
@@ -256,7 +259,7 @@ impl<'ctrl> WriteLockedController<'ctrl> {
     /// uploaded firmware to a particular NVMe slot.
     pub fn firmware_commit_request(
         &self,
-    ) -> Result<FirmwareCommitRequestBuilder<'_>, NvmeError> {
+    ) -> Result<FirmwareCommitRequestBuilder<'_>, NvmeControllerError> {
         let mut req = std::ptr::null_mut();
         self.check_result(
             unsafe { nvme_fw_commit_req_init(self.inner, &mut req) },
@@ -295,7 +298,7 @@ impl<'ctrl> Drop for FirmwareCommitRequestBuilder<'ctrl> {
 
 impl<'ctrl> FirmwareCommitRequestBuilder<'ctrl> {
     /// Set the NVMe slot the firmware is going to be commited to.
-    pub fn set_slot(self, slot: NvmeSlot) -> Result<Self, NvmeError> {
+    pub fn set_slot(self, slot: NvmeSlot) -> Result<Self, NvmeControllerError> {
         self.controller
             .check_result(
                 unsafe {
@@ -315,7 +318,7 @@ impl<'ctrl> FirmwareCommitRequestBuilder<'ctrl> {
     pub fn set_action(
         self,
         action: FirmwareCommitAction,
-    ) -> Result<Self, NvmeError> {
+    ) -> Result<Self, NvmeControllerError> {
         self.controller
             .check_result(
                 unsafe {
@@ -331,10 +334,34 @@ impl<'ctrl> FirmwareCommitRequestBuilder<'ctrl> {
     }
 
     /// Execute a firmware commit request.
-    pub fn execute(self) -> Result<(), NvmeError> {
-        self.controller
+    pub fn execute(self) -> Result<(), NvmeControllerError> {
+        match self
+            .controller
             .check_result(unsafe { nvme_fw_commit_req_exec(self.req) }, || {
                 "failed to execute firmware commit request"
-            })
+            }) {
+            Ok(_) => Ok(()),
+            // Check for advisory information otherwise return the error
+            Err(e) if e.code() == NvmeErrorCode::Controller => {
+                let mut sct = 0;
+                let mut sc = 0;
+
+                unsafe {
+                    nvme_ctrl_deverr(self.controller.inner, &mut sct, &mut sc)
+                };
+
+                match sct {
+                    NVME_CQE_SCT_SPECIFIC
+                        if sc == NVME_CQE_SC_SPC_FW_RESET
+                            || sc == NVME_CQE_SC_SPC_FW_NSSR
+                            || sc == NVME_CQE_SC_SPC_FW_NEXT_RESET =>
+                    {
+                        Ok(())
+                    }
+                    _ => Err(e),
+                }
+            }
+            Err(e) => Err(e),
+        }
     }
 }

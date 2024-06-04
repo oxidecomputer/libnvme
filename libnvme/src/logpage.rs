@@ -6,7 +6,10 @@ use std::{ffi::CStr, marker::PhantomData};
 
 use libnvme_sys::nvme::*;
 
-use crate::{controller::Controller, error::LibraryError, NvmeError};
+use crate::{
+    controller::{Controller, NvmeControllerError},
+    error::LibraryError,
+};
 
 pub(crate) struct NvmeLogReq<'a> {
     pub(crate) inner: *mut nvme_log_req_t,
@@ -62,7 +65,7 @@ fn get_logpage_size(
     controller: &Controller<'_>,
     disc: &NvmeLogDisc<'_>,
     req: &mut NvmeLogReq<'_>,
-) -> Result<usize, NvmeError> {
+) -> Result<usize, NvmeControllerError> {
     let mut len = 0;
     match unsafe { nvme_log_disc_size(disc.inner, &mut len) } {
         NVME_LOG_SIZE_K_VAR => {
@@ -115,7 +118,7 @@ impl<'a> Controller<'a> {
     pub(crate) fn get_logpage(
         &self,
         name: LogPageName,
-    ) -> Result<LogPageInfo<'a>, NvmeError> {
+    ) -> Result<LogPageInfo<'a>, NvmeControllerError> {
         let mut disc_ptr = std::ptr::null_mut();
         let mut req_ptr = std::ptr::null_mut();
 

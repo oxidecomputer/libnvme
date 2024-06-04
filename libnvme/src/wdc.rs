@@ -5,13 +5,14 @@
 use std::ops::Deref;
 
 use crate::{
-    controller::WriteLockedController, error::LibraryError, NvmeError,
+    controller::{NvmeControllerError, WriteLockedController},
+    error::LibraryError,
 };
 
 use libnvme_sys::nvme::{nvme_wdc_resize_get, nvme_wdc_resize_set};
 
 impl<'a> WriteLockedController<'a> {
-    pub fn wdc_resize_set(&self, size: u32) -> Result<(), NvmeError> {
+    pub fn wdc_resize_set(&self, size: u32) -> Result<(), NvmeControllerError> {
         let controller = self.deref();
         controller.check_result(
             unsafe { nvme_wdc_resize_set(controller.inner, size) },
@@ -19,7 +20,7 @@ impl<'a> WriteLockedController<'a> {
         )
     }
 
-    pub fn wdc_resize_get(&self) -> Result<u32, NvmeError> {
+    pub fn wdc_resize_get(&self) -> Result<u32, NvmeControllerError> {
         let mut size = 0;
         let controller = self.deref();
         controller
