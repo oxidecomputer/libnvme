@@ -1,4 +1,5 @@
 use core::slice;
+use std::io::{ErrorKind, Read};
 use std::mem::{self, MaybeUninit};
 
 use libnvme_sys::nvme::*;
@@ -64,8 +65,7 @@ impl FirmwareLogPage {
         // Controller Level Reset."
         let next_active_slot = match logpage.bitfield1.fw_next() {
             0 => None,
-            // BUG: fix the saturating sub
-            slot => Some(slot.saturating_sub(1)),
+            slot => Some(slot),
         };
 
         let number_of_slots = unsafe { (*identify.inner).id_frmw.fw_nslot() };
@@ -184,28 +184,72 @@ impl<'a> Controller<'a> {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum FirmwareLoadError {
+    #[error("{0}")]
+    Nvme(#[from] NvmeError),
+    #[error("Failed to upload firmware: {0}")]
+    IoError(#[from] std::io::Error),
+    #[error("XXX overflowed")]
+    Overflow,
+}
+
 impl<'ctrl> WriteLockedController<'ctrl> {
-    /// Upload new firmware to the NVMe controller.
-    ///
-    /// Note this firmware needs to be commited to a slot via
-    /// `FirmwareCommitRequestBuilder`.
-    pub fn firmware_load(&self, data: &[u8]) -> Result<(), NvmeError> {
+    /// Load a single chunk of firmware at offset
+    fn firmware_load_chunk(
+        &self,
+        data: &[u8],
+        offset: u64,
+    ) -> Result<(), NvmeError> {
         self.check_result(
             unsafe {
                 nvme_fw_load(
                     self.inner,
                     data.as_ptr().cast(),
                     data.len(),
-                    // FIXME today we expect the entire firmware blob as a
-                    // single `&[u8]` but in the future we may want to accept
-                    // something that implements `io::Read` and upload chunks
-                    // via the offset.  Firmware seems small enough that we
-                    // don't need this capability today.
-                    0,
+                    offset,
                 )
             },
             || "failed to load firmware",
         )
+    }
+
+    /// Upload new firmware to the NVMe controller.
+    ///
+    /// Note this firmware needs to be commited to a slot via
+    /// `FirmwareCommitRequestBuilder`.
+    pub fn firmware_load<R: Read>(
+        &self,
+        mut data: R,
+    ) -> Result<(), FirmwareLoadError> {
+        // TODO swap to the libnvme granularity function Andy is adding
+        const CHUNK_SIZE: usize = 0x1000;
+        let mut offset = 0u64;
+
+        loop {
+            let mut buf = vec![0; CHUNK_SIZE];
+            match data.read_exact(&mut buf) {
+                Ok(_) => self.firmware_load_chunk(buf.as_slice(), offset)?,
+                Err(e) if e.kind() == ErrorKind::Interrupted => continue,
+                Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
+                    let mut buf = Vec::new();
+                    data.read_to_end(&mut buf)?;
+                    if buf.is_empty() {
+                        break;
+                    }
+                    buf.resize(CHUNK_SIZE, 0);
+                    self.firmware_load_chunk(buf.as_slice(), offset)?;
+                    break;
+                }
+                Err(e) => return Err(e.into()),
+            }
+
+            offset = offset
+                .checked_add(CHUNK_SIZE as u64)
+                .ok_or(FirmwareLoadError::Overflow)?;
+        }
+
+        Ok(())
     }
 
     /// Returns a new `FirmwareCommitRequestBuilder` that can be used to commit
