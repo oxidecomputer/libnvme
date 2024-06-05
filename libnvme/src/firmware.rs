@@ -10,7 +10,7 @@ use crate::{
     controller_info::ControllerInfoIdentify,
     error::LibraryError,
     logpage::{LogPageInfo, LogPageName},
-    NvmeError, NvmeErrorCode,
+    NvmeError,
 };
 
 #[derive(Debug, Error)]
@@ -335,33 +335,9 @@ impl<'ctrl> FirmwareCommitRequestBuilder<'ctrl> {
 
     /// Execute a firmware commit request.
     pub fn execute(self) -> Result<(), NvmeControllerError> {
-        match self
-            .controller
+        self.controller
             .check_result(unsafe { nvme_fw_commit_req_exec(self.req) }, || {
                 "failed to execute firmware commit request"
-            }) {
-            Ok(_) => Ok(()),
-            // Check for advisory information otherwise return the error
-            Err(e) if e.code() == NvmeErrorCode::Controller => {
-                let mut sct = 0;
-                let mut sc = 0;
-
-                unsafe {
-                    nvme_ctrl_deverr(self.controller.inner, &mut sct, &mut sc)
-                };
-
-                match sct {
-                    NVME_CQE_SCT_SPECIFIC
-                        if sc == NVME_CQE_SC_SPC_FW_RESET
-                            || sc == NVME_CQE_SC_SPC_FW_NSSR
-                            || sc == NVME_CQE_SC_SPC_FW_NEXT_RESET =>
-                    {
-                        Ok(())
-                    }
-                    _ => Err(e),
-                }
-            }
-            Err(e) => Err(e),
-        }
+            })
     }
 }

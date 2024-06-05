@@ -18,6 +18,7 @@ name = "libnvme"
 version = "0.1.1"
 dependencies = [
  "libnvme-sys",
+ "nvme",
  "thiserror",
 ]
 
@@ -27,6 +28,10 @@ version = "0.0.0"
 dependencies = [
  "bitfield-struct",
 ]
+
+[[package]]
+name = "nvme"
+version = "0.1.0"
 
 [[package]]
 name = "proc-macro2"

@@ -21,6 +21,8 @@ mod wdc;
 
 use libnvme_sys::nvme::*;
 
+pub use ::nvme as nvmespec;
+
 use crate::controller::ControllerDiscovery;
 
 #[derive(Debug, Error)]

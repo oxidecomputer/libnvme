@@ -6,4 +6,5 @@ edition = "2021"
 
 [dependencies]
 libnvme-sys.workspace = true
+nvme.workspace = true
 thiserror.workspace = true
