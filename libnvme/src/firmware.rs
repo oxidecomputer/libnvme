@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use core::slice;
-use std::io::{ErrorKind, Read};
+use std::io::Read;
 use std::mem::{self, MaybeUninit};
 
 use libnvme_sys::nvme::*;
@@ -231,33 +231,30 @@ impl<'ctrl> WriteLockedController<'ctrl> {
     ) -> Result<(), FirmwareLoadError> {
         // TODO swap to the libnvme granularity function Andy is adding
         const CHUNK_SIZE: u64 = 0x1000;
+
+        let size = CHUNK_SIZE.try_into().expect("32-bit systems unsupported");
         let mut offset = 0u64;
+        let mut buf = Vec::new();
 
-        loop {
-            let len =
-                CHUNK_SIZE.try_into().expect("32-bit systems unsupported");
-            let mut buf = vec![0; len];
-            match data.read_exact(&mut buf) {
-                Ok(_) => self.firmware_load_chunk(buf.as_slice(), offset)?,
-                Err(e) if e.kind() == ErrorKind::Interrupted => continue,
-                Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
-                    let mut buf = Vec::new();
-                    data.read_to_end(&mut buf)?;
-                    if buf.is_empty() {
-                        break;
-                    }
-                    buf.resize(len, 0);
-                    self.firmware_load_chunk(buf.as_slice(), offset)?;
-                    break;
-                }
-                Err(e) => return Err(e.into()),
-            }
-
+        // Firmware blobs tend to be a few MB in size. For simplicity we are
+        // going to read everything passed to us via the reader into a Vec so
+        // that we split it into proper chunk sizes.
+        data.read_to_end(&mut buf)?;
+        let mut chunks = buf.chunks_exact(size);
+        for chunk in &mut chunks {
+            self.firmware_load_chunk(chunk, offset)?;
             // Safety: we expect libnvme to not allow us to upload a binary blob
             // this large, but let's catch it if it does happen.
             offset = offset
                 .checked_add(CHUNK_SIZE)
                 .ok_or(FirmwareLoadError::FirmwareImageTooLarge)?;
+        }
+        let remainder = chunks.remainder();
+        if !remainder.is_empty() {
+            // Take the remainder and pad it with zeros.
+            let mut chunk = remainder.to_vec();
+            chunk.resize(size, 0);
+            self.firmware_load_chunk(&chunk, offset)?;
         }
 
         Ok(())
