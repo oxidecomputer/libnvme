@@ -193,8 +193,8 @@ pub enum FirmwareLoadError {
     NvmeController(#[from] NvmeControllerError),
     #[error("Failed to upload firmware: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("XXX overflowed")]
-    Overflow,
+    #[error("Supplied firmware is too large")]
+    FirmwareImageTooLarge,
 }
 
 impl<'ctrl> WriteLockedController<'ctrl> {
@@ -226,11 +226,13 @@ impl<'ctrl> WriteLockedController<'ctrl> {
         mut data: R,
     ) -> Result<(), FirmwareLoadError> {
         // TODO swap to the libnvme granularity function Andy is adding
-        const CHUNK_SIZE: usize = 0x1000;
+        const CHUNK_SIZE: u64 = 0x1000;
         let mut offset = 0u64;
 
         loop {
-            let mut buf = vec![0; CHUNK_SIZE];
+            let len =
+                CHUNK_SIZE.try_into().expect("32-bit systems unsupported");
+            let mut buf = vec![0; len];
             match data.read_exact(&mut buf) {
                 Ok(_) => self.firmware_load_chunk(buf.as_slice(), offset)?,
                 Err(e) if e.kind() == ErrorKind::Interrupted => continue,
@@ -240,16 +242,18 @@ impl<'ctrl> WriteLockedController<'ctrl> {
                     if buf.is_empty() {
                         break;
                     }
-                    buf.resize(CHUNK_SIZE, 0);
+                    buf.resize(len, 0);
                     self.firmware_load_chunk(buf.as_slice(), offset)?;
                     break;
                 }
                 Err(e) => return Err(e.into()),
             }
 
+            // Safety: we expect libnvme to not allow us to upload a binary blob
+            // this large, but let's catch it if it does happen.
             offset = offset
-                .checked_add(CHUNK_SIZE as u64)
-                .ok_or(FirmwareLoadError::Overflow)?;
+                .checked_add(CHUNK_SIZE)
+                .ok_or(FirmwareLoadError::FirmwareImageTooLarge)?;
         }
 
         Ok(())
