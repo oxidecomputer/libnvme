@@ -3,7 +3,6 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use core::slice;
-use std::io::Read;
 use std::mem::{self, MaybeUninit};
 
 use libnvme_sys::nvme::*;
@@ -195,8 +194,6 @@ pub enum FirmwareLoadError {
     Nvme(#[from] NvmeError),
     #[error("{0}")]
     NvmeController(#[from] NvmeControllerError),
-    #[error("Failed to upload firmware: {0}")]
-    IoError(#[from] std::io::Error),
     #[error("Supplied firmware is too large")]
     FirmwareImageTooLarge,
 }
@@ -225,22 +222,16 @@ impl<'ctrl> WriteLockedController<'ctrl> {
     ///
     /// Note this firmware needs to be commited to a slot via
     /// `FirmwareCommitRequestBuilder`.
-    pub fn firmware_load<R: Read>(
-        &self,
-        mut data: R,
-    ) -> Result<(), FirmwareLoadError> {
+    pub fn firmware_load(&self, data: &[u8]) -> Result<(), FirmwareLoadError> {
         // TODO swap to the libnvme granularity function Andy is adding
         const CHUNK_SIZE: u64 = 0x1000;
 
         let size = CHUNK_SIZE.try_into().expect("32-bit systems unsupported");
         let mut offset = 0u64;
-        let mut buf = Vec::new();
 
-        // Firmware blobs tend to be a few MB in size. For simplicity we are
-        // going to read everything passed to us via the reader into a Vec so
-        // that we split it into proper chunk sizes.
-        data.read_to_end(&mut buf)?;
-        let mut chunks = buf.chunks_exact(size);
+        // Split the data up into chunks based on the Firmware Update
+        // Granularity (FWUG)
+        let mut chunks = data.chunks_exact(size);
         for chunk in &mut chunks {
             self.firmware_load_chunk(chunk, offset)?;
             // Safety: we expect libnvme to not allow us to upload a binary blob
