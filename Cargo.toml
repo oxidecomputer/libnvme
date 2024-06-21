@@ -2,9 +2,11 @@
 resolver = "2"
 members = [
  "libnvme-sys",
- "libnvme"
+ "libnvme",
+ "nvme"
 ]
 
 [workspace.dependencies]
+nvme = { path = "nvme" }
 libnvme-sys = { path = "libnvme-sys" }
 thiserror = "1.0.51"

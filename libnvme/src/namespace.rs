@@ -5,12 +5,11 @@
 use std::ffi::CStr;
 
 use crate::{
-    controller::Controller,
+    controller::{Controller, NvmeControllerError},
     controller_info::{NvmeInfoError, NvmeInfoErrorCode},
     error::{InternalError, LibraryError},
     lba::LbaFormat,
     util::FfiPtr,
-    NvmeError,
 };
 
 use libnvme_sys::nvme::*;
@@ -50,7 +49,7 @@ impl<'a> NamespaceDiscovery<'a> {
     pub(crate) fn new(
         controller: &'a Controller<'_>,
         level: NamespaceDiscoveryLevel,
-    ) -> Result<Self, NvmeError> {
+    ) -> Result<Self, NvmeControllerError> {
         let mut iter = std::ptr::null_mut();
         controller
             .check_result(
@@ -66,7 +65,9 @@ impl<'a> NamespaceDiscovery<'a> {
             .map(|_| NamespaceDiscovery { controller, iter })
     }
 
-    fn internal_step(&self) -> Result<Option<Namespace<'a>>, NvmeError> {
+    fn internal_step(
+        &self,
+    ) -> Result<Option<Namespace<'a>>, NvmeControllerError> {
         let mut nvme_ns_disc: *const nvme_ns_disc_t = std::ptr::null_mut();
         let state =
             unsafe { nvme_ns_discover_step(self.iter, &mut nvme_ns_disc) };
@@ -100,9 +101,9 @@ impl<'a> NamespaceDiscovery<'a> {
 }
 
 impl<'a> Iterator for NamespaceDiscovery<'a> {
-    type Item = Result<Namespace<'a>, NvmeError>;
+    type Item = Result<Namespace<'a>, NvmeControllerError>;
 
-    fn next(&mut self) -> Option<Result<Namespace<'a>, NvmeError>> {
+    fn next(&mut self) -> Option<Self::Item> {
         self.internal_step().transpose()
     }
 }
@@ -119,7 +120,7 @@ impl<'a> Drop for Namespace<'a> {
 }
 
 impl<'a> Namespace<'a> {
-    pub fn get_info(&self) -> Result<NamespaceInfo, NvmeError> {
+    pub fn get_info(&self) -> Result<NamespaceInfo, NvmeControllerError> {
         let mut nvme_ns_info: *mut nvme_ns_info_t = std::ptr::null_mut();
         self.controller
             .check_result(
@@ -129,14 +130,14 @@ impl<'a> Namespace<'a> {
             .map(|_| unsafe { NamespaceInfo::from_raw(nvme_ns_info) })
     }
 
-    pub fn blkdev_attach(&self) -> Result<(), NvmeError> {
+    pub fn blkdev_attach(&self) -> Result<(), NvmeControllerError> {
         self.controller
             .check_result(unsafe { nvme_ns_bd_attach(self.inner) }, || {
                 "failed to attach blkdev to namespace"
             })
     }
 
-    pub fn blkdev_detach(&self) -> Result<(), NvmeError> {
+    pub fn blkdev_detach(&self) -> Result<(), NvmeControllerError> {
         self.controller
             .check_result(unsafe { nvme_ns_bd_detach(self.inner) }, || {
                 "failed to detach blkdev to namespace"

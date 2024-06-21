@@ -2,7 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::ffi::{c_char, c_int, c_uint};
+use bitfield_struct::bitfield;
+use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use super::devinfo::di_node;
 use super::opaque_type;
@@ -137,6 +138,45 @@ pub const NVME_NS_DISC_F_NOT_IGNORED: nvme_ns_disc_level_t = 3;
 pub const NVME_NS_DISC_F_BLKDEV: nvme_ns_disc_level_t = 4;
 pub type nvme_ns_disc_level_t = ::std::os::raw::c_uint;
 
+pub const NVME_LOG_SIZE_K_UNKNOWN: nvme_log_size_kind_t = 0;
+pub const NVME_LOG_SIZE_K_FIXED: nvme_log_size_kind_t = 1;
+pub const NVME_LOG_SIZE_K_VAR: nvme_log_size_kind_t = 2;
+pub type nvme_log_size_kind_t = c_uint;
+
+// TODO: These come from nvme.h and should probably be pulled out into a NVMe
+//  spec crate at some point.
+pub const NVME_FWC_SAVE: u32 = 0;
+pub const NVME_FWC_SAVE_ACTIVATE: u32 = 1;
+pub const NVME_FWC_ACTIVATE: u32 = 2;
+pub const NVME_FWC_ACTIVATE_IMMED: u32 = 3;
+
+const NVME_FWVER_SZ: usize = 8;
+
+#[bitfield(u8)]
+pub struct nvme_fwslot_log_t_bitfield1 {
+    /// Active Firmware Slot
+    #[bits(3, access = RO)]
+    pub fw_afi: u8,
+    #[bits(1)]
+    __: u8, // fw_rsvd1
+    /// Next Active Firmware Slot
+    #[bits(3, access = RO)]
+    pub fw_next: u8,
+    #[bits(1)]
+    /// fw_rsvd2
+    __: B1,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct nvme_fwslot_log_t {
+    // fw_afi and fw_next
+    pub bitfield1: nvme_fwslot_log_t_bitfield1,
+    _reserved1: [u8; 7],
+    pub fw_frs: [[c_char; NVME_FWVER_SZ]; 7],
+    _reserved2: [u8; 512 - 64],
+}
+
 opaque_type!(nvme, nvme_t);
 opaque_type!(nvme_ctrl_iter, nvme_ctrl_iter_t);
 opaque_type!(nvme_ctrl_disc, nvme_ctrl_disc_t);
@@ -148,6 +188,13 @@ opaque_type!(nvme_ns, nvme_ns_t);
 opaque_type!(nvme_ns_info, nvme_ns_info_t);
 opaque_type!(nvme_nvm_lba_fmt, nvme_nvm_lba_fmt_t);
 opaque_type!(nvme_format_req, nvme_format_req_t);
+opaque_type!(nvme_log_disc, nvme_log_disc_t);
+opaque_type!(nvme_log_req, nvme_log_req_t);
+opaque_type!(nvme_fw_commit_req, nvme_fw_commit_req_t);
+
+// Using "super" here rather than "crate" because `ctest2` does not support rust
+// 2018 edition.
+pub type nvme_identify_ctrl_t = super::identify::nvme_identify_ctrl;
 
 #[link(name = "nvme")]
 extern "C" {
@@ -165,6 +212,12 @@ extern "C" {
     pub fn nvme_ctrl_errmsg(arg1: *mut nvme_ctrl_t) -> *const c_char;
     pub fn nvme_ctrl_syserr(arg1: *mut nvme_ctrl_t) -> c_int;
 
+    pub fn nvme_ctrl_deverr(
+        arg1: *mut nvme_ctrl_t,
+        arg2: *mut u32,
+        arg3: *mut u32,
+    );
+
     // NVMe Controller discovery.
     pub fn nvme_ctrl_disc_devi(arg1: *const nvme_ctrl_disc_t) -> *mut di_node;
     pub fn nvme_ctrl_discover_init(
@@ -179,6 +232,11 @@ extern "C" {
     pub fn nvme_ctrl_init(
         arg1: *mut nvme_t,
         arg2: *mut di_node,
+        arg3: *mut *mut nvme_ctrl_t,
+    ) -> bool;
+    pub fn nvme_ctrl_init_by_instance(
+        arg1: *mut nvme_t,
+        arg2: i32,
         arg3: *mut *mut nvme_ctrl_t,
     ) -> bool;
     pub fn nvme_ctrl_fini(arg1: *mut nvme_ctrl_t);
@@ -197,6 +255,9 @@ extern "C" {
     pub fn nvme_ctrl_info_syserr(arg1: *mut nvme_ctrl_info_t) -> c_int;
 
     // Information aobut an NVMe Controller
+    pub fn nvme_ctrl_info_identify(
+        arg1: *mut nvme_ctrl_info_t,
+    ) -> *const nvme_identify_ctrl_t;
     pub fn nvme_ctrl_info_model(arg1: *mut nvme_ctrl_info_t) -> *const c_char;
     pub fn nvme_ctrl_info_serial(arg1: *mut nvme_ctrl_info_t) -> *const c_char;
     pub fn nvme_ctrl_info_fwrev(arg1: *mut nvme_ctrl_info_t) -> *const c_char;
@@ -262,6 +323,55 @@ extern "C" {
     // Namespace Attach and Detach.
     pub fn nvme_ns_bd_attach(arg1: *mut nvme_ns_t) -> bool;
     pub fn nvme_ns_bd_detach(arg1: *mut nvme_ns_t) -> bool;
+
+    // NVMe Log Page Discovery
+    pub fn nvme_log_req_init_by_name(
+        arg1: *mut nvme_ctrl_t,
+        arg2: *const c_char,
+        arg3: c_uint,
+        arg4: *mut *mut nvme_log_disc_t,
+        arg5: *mut *mut nvme_log_req_t,
+    ) -> bool;
+    pub fn nvme_log_disc_size(
+        arg1: *const nvme_log_disc_t,
+        arg2: *mut u64,
+    ) -> nvme_log_size_kind_t;
+    pub fn nvme_log_req_set_output(
+        arg1: *mut nvme_log_req_t,
+        arg2: *mut c_void,
+        arg3: usize,
+    ) -> bool;
+    pub fn nvme_log_disc_calc_size(
+        arg1: *const nvme_log_disc_t,
+        arg2: *mut u64,
+        arg3: *const c_void,
+        arg4: usize,
+    ) -> bool;
+    pub fn nvme_log_req_exec(arg1: *mut nvme_log_req_t) -> bool;
+    pub fn nvme_log_disc_free(arg1: *mut nvme_log_disc_t);
+    pub fn nvme_log_req_fini(arg1: *mut nvme_log_req_t);
+
+    // Firmware Download and Commit (Activation)
+    pub fn nvme_fw_load(
+        arg1: *mut nvme_ctrl_t,
+        arg2: *const c_void,
+        arg3: usize,
+        arg4: u64,
+    ) -> bool;
+    pub fn nvme_fw_commit_req_init(
+        arg1: *mut nvme_ctrl_t,
+        arg2: *mut *mut nvme_fw_commit_req_t,
+    ) -> bool;
+    pub fn nvme_fw_commit_req_fini(arg1: *mut nvme_fw_commit_req_t);
+    pub fn nvme_fw_commit_req_set_slot(
+        arg1: *mut nvme_fw_commit_req_t,
+        arg2: u32,
+    ) -> bool;
+    pub fn nvme_fw_commit_req_set_action(
+        arg1: *mut nvme_fw_commit_req_t,
+        arg2: u32,
+    ) -> bool;
+    pub fn nvme_fw_commit_req_exec(arg1: *mut nvme_fw_commit_req_t) -> bool;
 
     // Format NVM
     //

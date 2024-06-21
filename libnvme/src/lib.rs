@@ -12,12 +12,16 @@ use thiserror::Error;
 pub mod controller;
 pub mod controller_info;
 mod error;
+pub mod firmware;
 mod lba;
+mod logpage;
 pub mod namespace;
 mod util;
 mod wdc;
 
 use libnvme_sys::nvme::*;
+
+pub use ::nvme as nvmespec;
 
 use crate::controller::ControllerDiscovery;
 

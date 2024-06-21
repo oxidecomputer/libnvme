@@ -3,10 +3,11 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::{ffi::CStr, ops::Deref};
+use thiserror::Error;
 
 use crate::{
     controller_info::ControllerInfo,
-    error::LibraryError,
+    error::{InternalError, LibraryError},
     namespace::{NamespaceDiscovery, NamespaceDiscoveryLevel},
     util::FfiPtr,
     Nvme, NvmeError, NvmeErrorCode,
@@ -36,11 +37,27 @@ pub struct Controller<'a> {
 }
 
 impl<'a> Controller<'a> {
-    pub fn get_info(&self) -> Result<ControllerInfo, NvmeError> {
+    /// Initialize a `Controller` from an instance.
+    pub fn init_by_instance(
+        nvme: &'a Nvme,
+        instance: i32,
+    ) -> Result<Self, NvmeError> {
+        let mut controller = std::ptr::null_mut();
+        nvme.check_result(
+            unsafe {
+                nvme_ctrl_init_by_instance(nvme.0, instance, &mut controller)
+            },
+            || format!("failed to get controller for instance {instance}"),
+        )?;
+
+        Ok(Self { inner: controller, _nvme: nvme })
+    }
+
+    pub fn get_info(&self) -> Result<ControllerInfo, NvmeControllerError> {
         let mut ctrl_info: *mut nvme_ctrl_info_t = std::ptr::null_mut();
         self.check_result(
             unsafe { nvme_ctrl_info_snap(self.inner, &mut ctrl_info) },
-            || "failed to get controller snapshot",
+            || "failed to get controller info snapshot",
         )
         .map(|_| unsafe { ControllerInfo::from_raw(ctrl_info) })
     }
@@ -49,7 +66,7 @@ impl<'a> Controller<'a> {
         self,
         level: ControllerLockLevel,
         flags: ControllerLockFlags,
-    ) -> Result<Self, (Self, NvmeError)> {
+    ) -> Result<Self, (Self, NvmeControllerError)> {
         if let Err(e) = self.check_result(
             unsafe { nvme_ctrl_lock(self.inner, level as u32, flags as u32) },
             || "failed to grab nvme controller lock",
@@ -61,21 +78,22 @@ impl<'a> Controller<'a> {
 
     pub fn read_lock(
         self,
-    ) -> Result<ReadLockedController<'a>, (Self, NvmeError)> {
+    ) -> Result<ReadLockedController<'a>, (Self, NvmeControllerError)> {
         self.lock_impl(ControllerLockLevel::Read, ControllerLockFlags::Block)
             .map(|c| ReadLockedController { controller: Some(c) })
     }
 
     pub fn write_lock(
         self,
-    ) -> Result<WriteLockedController<'a>, (Self, NvmeError)> {
+    ) -> Result<WriteLockedController<'a>, (Self, NvmeControllerError)> {
         self.lock_impl(ControllerLockLevel::Write, ControllerLockFlags::Block)
             .map(|c| WriteLockedController { controller: Some(c) })
     }
 
     pub fn try_read_lock(
         self,
-    ) -> TryLockResult<ReadLockedController<'a>, Self, NvmeError> {
+    ) -> TryLockResult<ReadLockedController<'a>, Self, NvmeControllerError>
+    {
         match self.lock_impl(
             ControllerLockLevel::Read,
             ControllerLockFlags::DontBlock,
@@ -94,7 +112,8 @@ impl<'a> Controller<'a> {
 
     pub fn try_write_lock(
         self,
-    ) -> TryLockResult<WriteLockedController<'a>, Self, NvmeError> {
+    ) -> TryLockResult<WriteLockedController<'a>, Self, NvmeControllerError>
+    {
         match self.lock_impl(
             ControllerLockLevel::Write,
             ControllerLockFlags::DontBlock,
@@ -114,7 +133,7 @@ impl<'a> Controller<'a> {
     pub fn namespace_discovery(
         &self,
         level: NamespaceDiscoveryLevel,
-    ) -> Result<NamespaceDiscovery<'_>, NvmeError> {
+    ) -> Result<NamespaceDiscovery<'_>, NvmeControllerError> {
         NamespaceDiscovery::new(self, level)
     }
 }
@@ -188,8 +207,31 @@ impl<'a> Iterator for ControllerDiscovery<'a> {
     }
 }
 
+#[derive(Debug, Error)]
+#[error("{error}")]
+pub struct NvmeControllerError {
+    code: NvmeErrorCode,
+    device_status_code_type: u32,
+    device_status_code: u32,
+    error: InternalError,
+}
+
+impl NvmeControllerError {
+    pub fn code(&self) -> NvmeErrorCode {
+        self.code
+    }
+
+    pub fn device_status_code_type(&self) -> u32 {
+        self.device_status_code_type
+    }
+
+    pub fn device_status_code(&self) -> u32 {
+        self.device_status_code
+    }
+}
+
 impl<'a> LibraryError for Controller<'a> {
-    type Error = NvmeError;
+    type Error = NvmeControllerError;
 
     fn get_errmsg(&self) -> String {
         let errmsg = unsafe { nvme_ctrl_errmsg(self.inner) };
@@ -204,8 +246,24 @@ impl<'a> LibraryError for Controller<'a> {
         &self,
         internal: crate::error::InternalError,
     ) -> Self::Error {
+        let mut device_status_code_type = 0;
+        let mut device_status_code = 0;
+
         let raw = unsafe { nvme_ctrl_err(self.inner) };
-        NvmeError { code: NvmeErrorCode::from_raw(raw), error: internal }
+        unsafe {
+            nvme_ctrl_deverr(
+                self.inner,
+                &mut device_status_code_type,
+                &mut device_status_code,
+            )
+        };
+
+        NvmeControllerError {
+            code: NvmeErrorCode::from_raw(raw),
+            device_status_code_type,
+            device_status_code,
+            error: internal,
+        }
     }
 }
 
@@ -260,7 +318,7 @@ impl<'a> WriteLockedController<'a> {
 
     pub fn format_request(
         &self,
-    ) -> Result<FormatRequestBuilder<'_>, NvmeError> {
+    ) -> Result<FormatRequestBuilder<'_>, NvmeControllerError> {
         let controller =
             self.controller.as_ref().expect("controller is locked");
         let mut req = std::ptr::null_mut();
@@ -293,7 +351,7 @@ impl<'ctrl> Drop for FormatRequestBuilder<'ctrl> {
 }
 
 impl<'ctrl> FormatRequestBuilder<'ctrl> {
-    pub fn set_lbaf(self, lbaf: u32) -> Result<Self, NvmeError> {
+    pub fn set_lbaf(self, lbaf: u32) -> Result<Self, NvmeControllerError> {
         self.controller
             .check_result(
                 unsafe { nvme_format_req_set_lbaf(self.req, lbaf) },
@@ -302,7 +360,7 @@ impl<'ctrl> FormatRequestBuilder<'ctrl> {
             .map(|_| self)
     }
 
-    pub fn set_nsid(self, nsid: u32) -> Result<Self, NvmeError> {
+    pub fn set_nsid(self, nsid: u32) -> Result<Self, NvmeControllerError> {
         self.controller
             .check_result(
                 unsafe { nvme_format_req_set_nsid(self.req, nsid) },
@@ -311,7 +369,7 @@ impl<'ctrl> FormatRequestBuilder<'ctrl> {
             .map(|_| self)
     }
 
-    pub fn set_ses(self, ses: u32) -> Result<Self, NvmeError> {
+    pub fn set_ses(self, ses: u32) -> Result<Self, NvmeControllerError> {
         self.controller
             .check_result(
                 unsafe { nvme_format_req_set_ses(self.req, ses) },
@@ -320,7 +378,7 @@ impl<'ctrl> FormatRequestBuilder<'ctrl> {
             .map(|_| self)
     }
 
-    pub fn execute(self) -> Result<(), NvmeError> {
+    pub fn execute(self) -> Result<(), NvmeControllerError> {
         self.controller
             .check_result(unsafe { nvme_format_req_exec(self.req) }, || {
                 "failed to execute format request"
