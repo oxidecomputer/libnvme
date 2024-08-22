@@ -223,29 +223,29 @@ impl<'ctrl> WriteLockedController<'ctrl> {
     /// Note this firmware needs to be commited to a slot via
     /// `FirmwareCommitRequestBuilder`.
     pub fn firmware_load(&self, data: &[u8]) -> Result<(), FirmwareLoadError> {
-        // TODO swap to the libnvme granularity function Andy is adding
-        const CHUNK_SIZE: u64 = 0x1000;
+        // We ideally would like to check that `data.len()` is using the right
+        // Firmware Update Granularity (FWUG) but we have observed drives
+        // where the provided vendor firmware size is not a multiple of the
+        // granularity. Instead we are breaking the data up into 64K chunks and
+        // allowing libnvme to verify for us that the firmware is at least a
+        // multiple of a DWORD (4 bytes).
+        const CHUNK_SIZE: u64 = 64 * 1024;
 
         let size = CHUNK_SIZE.try_into().expect("32-bit systems unsupported");
         let mut offset = 0u64;
 
-        // Split the data up into chunks based on the Firmware Update
-        // Granularity (FWUG)
-        let mut chunks = data.chunks_exact(size);
+        let mut chunks = data.chunks(size);
         for chunk in &mut chunks {
             self.firmware_load_chunk(chunk, offset)?;
-            // Safety: we expect libnvme to not allow us to upload a binary blob
-            // this large, but let's catch it if it does happen.
+            // SAFETY:
+            // - adding CHUNK_SIZE to the offset every time is okay since only
+            //   the last chunk may be smaller and there will be no more chunks
+            //   to process in the loop.
+            // - we expect libnvme to not allow us to upload a binary blob
+            //   this large, but let's catch it if it does happen.
             offset = offset
                 .checked_add(CHUNK_SIZE)
                 .ok_or(FirmwareLoadError::FirmwareImageTooLarge)?;
-        }
-        let remainder = chunks.remainder();
-        if !remainder.is_empty() {
-            // Take the remainder and pad it with zeros.
-            let mut chunk = remainder.to_vec();
-            chunk.resize(size, 0);
-            self.firmware_load_chunk(&chunk, offset)?;
         }
 
         Ok(())
