@@ -348,7 +348,7 @@ extern "C" {
         buflen: usize,
     ) -> bool;
     pub fn nvme_log_req_exec(req: *mut nvme_log_req_t) -> bool;
-    pub fn nvme_log_disc_free(req: *mut nvme_log_disc_t);
+    pub fn nvme_log_disc_free(disc: *mut nvme_log_disc_t);
     pub fn nvme_log_req_fini(req: *mut nvme_log_req_t);
 
     // Firmware Download and Commit (Activation)
