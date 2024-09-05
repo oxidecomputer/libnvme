@@ -200,205 +200,205 @@ pub type nvme_identify_ctrl_t = super::identify::nvme_identify_ctrl;
 extern "C" {
     // NVMe handle.
     pub fn nvme_init() -> *mut nvme_t;
-    pub fn nvme_fini(arg1: *mut nvme_t);
+    pub fn nvme_fini(nvme: *mut nvme_t);
 
     /// NVMe Handle errors.
-    pub fn nvme_err(arg1: *mut nvme_t) -> nvme_err_t;
-    pub fn nvme_errmsg(arg1: *mut nvme_t) -> *const c_char;
-    pub fn nvme_syserr(arg1: *mut nvme_t) -> c_int;
+    pub fn nvme_err(nvme: *mut nvme_t) -> nvme_err_t;
+    pub fn nvme_errmsg(nvme: *mut nvme_t) -> *const c_char;
+    pub fn nvme_syserr(nvme: *mut nvme_t) -> c_int;
 
     // NVMe Controller errors.
-    pub fn nvme_ctrl_err(arg1: *mut nvme_ctrl_t) -> nvme_err_t;
-    pub fn nvme_ctrl_errmsg(arg1: *mut nvme_ctrl_t) -> *const c_char;
-    pub fn nvme_ctrl_syserr(arg1: *mut nvme_ctrl_t) -> c_int;
+    pub fn nvme_ctrl_err(ctrl: *mut nvme_ctrl_t) -> nvme_err_t;
+    pub fn nvme_ctrl_errmsg(ctrl: *mut nvme_ctrl_t) -> *const c_char;
+    pub fn nvme_ctrl_syserr(ctrl: *mut nvme_ctrl_t) -> c_int;
 
     pub fn nvme_ctrl_deverr(
-        arg1: *mut nvme_ctrl_t,
-        arg2: *mut u32,
-        arg3: *mut u32,
+        ctrl: *mut nvme_ctrl_t,
+        sct: *mut u32,
+        sc: *mut u32,
     );
 
     // NVMe Controller discovery.
-    pub fn nvme_ctrl_disc_devi(arg1: *const nvme_ctrl_disc_t) -> *mut di_node;
+    pub fn nvme_ctrl_disc_devi(discp: *const nvme_ctrl_disc_t) -> *mut di_node;
     pub fn nvme_ctrl_discover_init(
-        arg1: *mut nvme_t,
-        arg2: *mut *mut nvme_ctrl_iter_t,
+        nvme: *mut nvme_t,
+        iterp: *mut *mut nvme_ctrl_iter_t,
     ) -> bool;
     pub fn nvme_ctrl_discover_step(
-        arg1: *mut nvme_ctrl_iter_t,
-        arg2: *mut *const nvme_ctrl_disc_t,
+        iter: *mut nvme_ctrl_iter_t,
+        discp: *mut *const nvme_ctrl_disc_t,
     ) -> nvme_iter_t;
-    pub fn nvme_ctrl_discover_fini(arg1: *mut nvme_ctrl_iter_t);
+    pub fn nvme_ctrl_discover_fini(iter: *mut nvme_ctrl_iter_t);
     pub fn nvme_ctrl_init(
-        arg1: *mut nvme_t,
-        arg2: *mut di_node,
-        arg3: *mut *mut nvme_ctrl_t,
+        nvme: *mut nvme_t,
+        di: *mut di_node,
+        outp: *mut *mut nvme_ctrl_t,
     ) -> bool;
     pub fn nvme_ctrl_init_by_instance(
-        arg1: *mut nvme_t,
-        arg2: i32,
-        arg3: *mut *mut nvme_ctrl_t,
+        nvme: *mut nvme_t,
+        inst: i32,
+        outp: *mut *mut nvme_ctrl_t,
     ) -> bool;
-    pub fn nvme_ctrl_fini(arg1: *mut nvme_ctrl_t);
+    pub fn nvme_ctrl_fini(ctrl: *mut nvme_ctrl_t);
 
     // NVMe Controller information. Information about a controller is a
     // separate lifetime than the controller itself.
     pub fn nvme_ctrl_info_snap(
-        arg1: *mut nvme_ctrl_t,
-        arg2: *mut *mut nvme_ctrl_info_t,
+        ctrl: *mut nvme_ctrl_t,
+        outp: *mut *mut nvme_ctrl_info_t,
     ) -> bool;
-    pub fn nvme_ctrl_info_free(arg1: *mut nvme_ctrl_info_t);
+    pub fn nvme_ctrl_info_free(ci: *mut nvme_ctrl_info_t);
 
     // NVMe Controller information errors.
-    pub fn nvme_ctrl_info_err(arg1: *mut nvme_ctrl_info_t) -> nvme_info_err_t;
-    pub fn nvme_ctrl_info_errmsg(arg1: *mut nvme_ctrl_info_t) -> *const c_char;
-    pub fn nvme_ctrl_info_syserr(arg1: *mut nvme_ctrl_info_t) -> c_int;
+    pub fn nvme_ctrl_info_err(ci: *mut nvme_ctrl_info_t) -> nvme_info_err_t;
+    pub fn nvme_ctrl_info_errmsg(ci: *mut nvme_ctrl_info_t) -> *const c_char;
+    pub fn nvme_ctrl_info_syserr(ci: *mut nvme_ctrl_info_t) -> c_int;
 
     // Information aobut an NVMe Controller
     pub fn nvme_ctrl_info_identify(
-        arg1: *mut nvme_ctrl_info_t,
+        ci: *mut nvme_ctrl_info_t,
     ) -> *const nvme_identify_ctrl_t;
-    pub fn nvme_ctrl_info_model(arg1: *mut nvme_ctrl_info_t) -> *const c_char;
-    pub fn nvme_ctrl_info_serial(arg1: *mut nvme_ctrl_info_t) -> *const c_char;
-    pub fn nvme_ctrl_info_fwrev(arg1: *mut nvme_ctrl_info_t) -> *const c_char;
-    pub fn nvme_ctrl_info_nns(arg1: *mut nvme_ctrl_info_t) -> u32;
+    pub fn nvme_ctrl_info_model(ci: *mut nvme_ctrl_info_t) -> *const c_char;
+    pub fn nvme_ctrl_info_serial(ci: *mut nvme_ctrl_info_t) -> *const c_char;
+    pub fn nvme_ctrl_info_fwrev(ci: *mut nvme_ctrl_info_t) -> *const c_char;
+    pub fn nvme_ctrl_info_nns(ci: *mut nvme_ctrl_info_t) -> u32;
     pub fn nvme_ctrl_info_pci_vid(
-        arg1: *mut nvme_ctrl_info_t,
-        arg2: *mut u16,
+        ci: *mut nvme_ctrl_info_t,
+        u16p: *mut u16,
     ) -> bool;
 
     // NVM command set for controllers.
-    pub fn nvme_ctrl_info_nformats(arg1: *mut nvme_ctrl_info_t) -> u32;
+    pub fn nvme_ctrl_info_nformats(ci: *mut nvme_ctrl_info_t) -> u32;
     pub fn nvme_ctrl_info_format(
-        arg1: *mut nvme_ctrl_info_t,
-        arg2: u32,
-        arg3: *mut *const nvme_nvm_lba_fmt_t,
+        ci: *mut nvme_ctrl_info_t,
+        idx: u32,
+        outp: *mut *const nvme_nvm_lba_fmt_t,
     ) -> bool;
-    pub fn nvme_nvm_lba_fmt_id(arg1: *const nvme_nvm_lba_fmt_t) -> u32;
-    pub fn nvme_nvm_lba_fmt_meta_size(arg1: *const nvme_nvm_lba_fmt_t) -> u32;
-    pub fn nvme_nvm_lba_fmt_data_size(arg1: *const nvme_nvm_lba_fmt_t) -> u64;
-    pub fn nvme_nvm_lba_fmt_rel_perf(arg1: *const nvme_nvm_lba_fmt_t) -> u32;
+    pub fn nvme_nvm_lba_fmt_id(labf: *const nvme_nvm_lba_fmt_t) -> u32;
+    pub fn nvme_nvm_lba_fmt_meta_size(labf: *const nvme_nvm_lba_fmt_t) -> u32;
+    pub fn nvme_nvm_lba_fmt_data_size(labf: *const nvme_nvm_lba_fmt_t) -> u64;
+    pub fn nvme_nvm_lba_fmt_rel_perf(labf: *const nvme_nvm_lba_fmt_t) -> u32;
 
     // NVMe Namespace Discovery.
     pub fn nvme_ns_discover_init(
-        arg1: *mut nvme_ctrl_t,
-        arg2: nvme_ns_disc_level_t,
-        arg2: *mut *mut nvme_ns_iter_t,
+        ctrl: *mut nvme_ctrl_t,
+        level: nvme_ns_disc_level_t,
+        iter: *mut *mut nvme_ns_iter_t,
     ) -> bool;
-    pub fn nvme_ns_discover_fini(arg1: *mut nvme_ns_iter_t);
+    pub fn nvme_ns_discover_fini(iter: *mut nvme_ns_iter_t);
     pub fn nvme_ns_discover_step(
-        arg1: *mut nvme_ns_iter_t,
-        arg2: *mut *const nvme_ns_disc_t,
+        iter: *mut nvme_ns_iter_t,
+        discp: *mut *const nvme_ns_disc_t,
     ) -> nvme_iter_t;
-    pub fn nvme_ns_disc_nsid(arg1: *const nvme_ns_disc_t) -> u32;
+    pub fn nvme_ns_disc_nsid(discp: *const nvme_ns_disc_t) -> u32;
     pub fn nvme_ns_init(
-        arg1: *mut nvme_ctrl_t,
-        arg2: u32,
-        arg2: *mut *mut nvme_ns_t,
+        ctrl: *mut nvme_ctrl_t,
+        nsid: u32,
+        nsp: *mut *mut nvme_ns_t,
     ) -> bool;
-    pub fn nvme_ns_fini(arg1: *mut nvme_ns_t);
+    pub fn nvme_ns_fini(ns: *mut nvme_ns_t);
 
     // NVMe Namespace information.
     pub fn nvme_ns_info_snap(
-        arg1: *mut nvme_ns_t,
-        arg2: *mut *mut nvme_ns_info_t,
+        ns: *mut nvme_ns_t,
+        infop: *mut *mut nvme_ns_info_t,
     ) -> bool;
-    pub fn nvme_ns_info_free(arg1: *mut nvme_ns_info_t);
-    pub fn nvme_ns_info_err(arg1: *mut nvme_ns_info_t) -> nvme_info_err_t;
-    pub fn nvme_ns_info_errmsg(arg1: *mut nvme_ns_info_t) -> *const c_char;
-    pub fn nvme_ns_info_syserr(arg1: *mut nvme_ns_info_t) -> c_int;
+    pub fn nvme_ns_info_free(info: *mut nvme_ns_info_t);
+    pub fn nvme_ns_info_err(info: *mut nvme_ns_info_t) -> nvme_info_err_t;
+    pub fn nvme_ns_info_errmsg(info: *mut nvme_ns_info_t) -> *const c_char;
+    pub fn nvme_ns_info_syserr(info: *mut nvme_ns_info_t) -> c_int;
     pub fn nvme_ns_info_curformat(
-        arg1: *mut nvme_ns_info_t,
-        arg2: *mut *const nvme_nvm_lba_fmt,
+        info: *mut nvme_ns_info_t,
+        fmtp: *mut *const nvme_nvm_lba_fmt,
     ) -> bool;
 
     // Controller Locking.
     pub fn nvme_ctrl_lock(
-        arg1: *mut nvme_ctrl_t,
-        arg2: nvme_lock_level_t,
-        arg3: nvme_lock_flags_t,
+        ctrl: *mut nvme_ctrl_t,
+        level: nvme_lock_level_t,
+        flags: nvme_lock_flags_t,
     ) -> bool;
-    pub fn nvme_ctrl_unlock(arg1: *mut nvme_ctrl_t);
+    pub fn nvme_ctrl_unlock(ctrl: *mut nvme_ctrl_t);
 
     // Namespace Attach and Detach.
-    pub fn nvme_ns_bd_attach(arg1: *mut nvme_ns_t) -> bool;
-    pub fn nvme_ns_bd_detach(arg1: *mut nvme_ns_t) -> bool;
+    pub fn nvme_ns_bd_attach(ns: *mut nvme_ns_t) -> bool;
+    pub fn nvme_ns_bd_detach(ns: *mut nvme_ns_t) -> bool;
 
     // NVMe Log Page Discovery
     pub fn nvme_log_req_init_by_name(
-        arg1: *mut nvme_ctrl_t,
-        arg2: *const c_char,
-        arg3: c_uint,
-        arg4: *mut *mut nvme_log_disc_t,
-        arg5: *mut *mut nvme_log_req_t,
+        ctrl: *mut nvme_ctrl_t,
+        name: *const c_char,
+        flags: c_uint,
+        discp: *mut *mut nvme_log_disc_t,
+        reqp: *mut *mut nvme_log_req_t,
     ) -> bool;
     pub fn nvme_log_disc_size(
-        arg1: *const nvme_log_disc_t,
-        arg2: *mut u64,
+        disc: *const nvme_log_disc_t,
+        sizep: *mut u64,
     ) -> nvme_log_size_kind_t;
     pub fn nvme_log_req_set_output(
-        arg1: *mut nvme_log_req_t,
-        arg2: *mut c_void,
-        arg3: usize,
+        req: *mut nvme_log_req_t,
+        buf: *mut c_void,
+        buflen: usize,
     ) -> bool;
     pub fn nvme_log_disc_calc_size(
-        arg1: *const nvme_log_disc_t,
-        arg2: *mut u64,
-        arg3: *const c_void,
-        arg4: usize,
+        disc: *const nvme_log_disc_t,
+        act: *mut u64,
+        buf: *const c_void,
+        buflen: usize,
     ) -> bool;
-    pub fn nvme_log_req_exec(arg1: *mut nvme_log_req_t) -> bool;
-    pub fn nvme_log_disc_free(arg1: *mut nvme_log_disc_t);
-    pub fn nvme_log_req_fini(arg1: *mut nvme_log_req_t);
+    pub fn nvme_log_req_exec(req: *mut nvme_log_req_t) -> bool;
+    pub fn nvme_log_disc_free(disc: *mut nvme_log_disc_t);
+    pub fn nvme_log_req_fini(req: *mut nvme_log_req_t);
 
     // Firmware Download and Commit (Activation)
     pub fn nvme_fw_load(
-        arg1: *mut nvme_ctrl_t,
-        arg2: *const c_void,
-        arg3: usize,
-        arg4: u64,
+        ctrl: *mut nvme_ctrl_t,
+        buf: *const c_void,
+        len: usize,
+        off: u64,
     ) -> bool;
     pub fn nvme_fw_commit_req_init(
-        arg1: *mut nvme_ctrl_t,
-        arg2: *mut *mut nvme_fw_commit_req_t,
+        ctrl: *mut nvme_ctrl_t,
+        reqp: *mut *mut nvme_fw_commit_req_t,
     ) -> bool;
-    pub fn nvme_fw_commit_req_fini(arg1: *mut nvme_fw_commit_req_t);
+    pub fn nvme_fw_commit_req_fini(req: *mut nvme_fw_commit_req_t);
     pub fn nvme_fw_commit_req_set_slot(
-        arg1: *mut nvme_fw_commit_req_t,
-        arg2: u32,
+        req: *mut nvme_fw_commit_req_t,
+        slot: u32,
     ) -> bool;
     pub fn nvme_fw_commit_req_set_action(
-        arg1: *mut nvme_fw_commit_req_t,
-        arg2: u32,
+        req: *mut nvme_fw_commit_req_t,
+        act: u32,
     ) -> bool;
-    pub fn nvme_fw_commit_req_exec(arg1: *mut nvme_fw_commit_req_t) -> bool;
+    pub fn nvme_fw_commit_req_exec(req: *mut nvme_fw_commit_req_t) -> bool;
 
     // Format NVM
     //
     // These are used to erase and reformat either all namespaces or a specific
     // one.
     pub fn nvme_format_req_init(
-        arg1: *mut nvme_ctrl_t,
-        arg2: *mut *mut nvme_format_req_t,
+        ctrl: *mut nvme_ctrl_t,
+        reqp: *mut *mut nvme_format_req_t,
     ) -> bool;
     pub fn nvme_format_req_set_lbaf(
-        arg1: *mut nvme_format_req_t,
-        arg2: u32,
+        req: *mut nvme_format_req_t,
+        lbaf: u32,
     ) -> bool;
     pub fn nvme_format_req_set_ses(
-        arg1: *mut nvme_format_req_t,
-        arg2: u32,
+        req: *mut nvme_format_req_t,
+        ses: u32,
     ) -> bool;
     pub fn nvme_format_req_set_nsid(
-        arg1: *mut nvme_format_req_t,
-        arg2: u32,
+        req: *mut nvme_format_req_t,
+        nsid: u32,
     ) -> bool;
-    pub fn nvme_format_req_exec(arg1: *mut nvme_format_req_t) -> bool;
-    pub fn nvme_format_req_fini(arg1: *mut nvme_format_req_t);
+    pub fn nvme_format_req_exec(req: *mut nvme_format_req_t) -> bool;
+    pub fn nvme_format_req_fini(req: *mut nvme_format_req_t);
 
     // WDC resizing functions.  These are interfaces supported in the SN840,
     // SN650, SN655, etc.
-    pub fn nvme_wdc_resize_set(arg1: *mut nvme_ctrl_t, arg2: u32) -> bool;
-    pub fn nvme_wdc_resize_get(arg1: *mut nvme_ctrl_t, arg2: *mut u32) -> bool;
+    pub fn nvme_wdc_resize_set(ctrl: *mut nvme_ctrl_t, gb: u32) -> bool;
+    pub fn nvme_wdc_resize_get(ctrl: *mut nvme_ctrl_t, gbp: *mut u32) -> bool;
 
 }

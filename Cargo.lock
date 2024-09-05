@@ -15,7 +15,7 @@ dependencies = [
 
 [[package]]
 name = "libnvme"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "libnvme-sys",
  "nvme",
