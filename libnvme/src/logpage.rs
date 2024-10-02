@@ -15,12 +15,6 @@ pub(crate) struct NvmeLogReq<'a> {
     pub(crate) inner: *mut nvme_log_req_t,
     // The log page being requested
     pub(crate) page_name: LogPageName,
-    // When determining the actual size of a `NVME_LOG_SIZE_K_VAR` log page
-    // we need to supply libnvme with a temporary buffer. To prevent a dangling
-    // pointer we are holding onto this buffer even though it won't be used
-    // directly by any future consumers as the library itself should be calling
-    // `nvme_log_req_set_output` again with the appropriately sized buffer.
-    buf: Vec<u8>,
     // This is the `Controller` the log request was created from.
     _phantom: PhantomData<&'a Controller<'a>>,
 }
@@ -73,13 +67,13 @@ fn get_logpage_size(
             // actual size.
             let mut actual_size_needed = 0;
             let len = len.try_into().expect("32-bit systems unsupported");
-            req.buf.resize(len, 0);
+            let mut buf = vec![0; len];
 
             controller.check_result(
                 unsafe {
                     nvme_log_req_set_output(
                         req.inner,
-                        req.buf.as_mut_ptr().cast(),
+                        buf.as_mut_ptr().cast(),
                         len,
                     )
                 },
@@ -94,7 +88,7 @@ fn get_logpage_size(
                     nvme_log_disc_calc_size(
                         disc.inner,
                         &mut actual_size_needed,
-                        req.buf.as_mut_ptr().cast(),
+                        buf.as_mut_ptr().cast(),
                         len,
                     )
                 },
@@ -104,6 +98,13 @@ fn get_logpage_size(
                         req.page_name
                     )
                 },
+            )?;
+
+            // Clean up the temporary req output so that it's not left with a
+            // dangling pointer after this function returns.
+            controller.check_result(
+                unsafe { nvme_log_req_clear_output(req.inner) },
+                || format!("failed to clear req log output while determining the full log page length for {:?}", req.page_name),
             )?;
 
             Ok(actual_size_needed
@@ -139,11 +140,13 @@ impl<'a> Controller<'a> {
         let mut req = NvmeLogReq {
             inner: req_ptr,
             page_name: name,
-            buf: Vec::new(),
             _phantom: PhantomData,
         };
-        let size = get_logpage_size(self, &disc, &mut req)?;
 
+        // NB: if this fails it's important that we drop req here and don't
+        // reuse it since we don't know the state of the output buffer that may
+        // have been used when determining the actual log page size.
+        let size = get_logpage_size(self, &disc, &mut req)?;
         Ok(LogPageInfo { size, req })
     }
 }
