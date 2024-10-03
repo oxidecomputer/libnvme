@@ -15,12 +15,6 @@ pub(crate) struct NvmeLogReq<'a> {
     pub(crate) inner: *mut nvme_log_req_t,
     // The log page being requested
     pub(crate) page_name: LogPageName,
-    // When determining the actual size of a `NVME_LOG_SIZE_K_VAR` log page
-    // we need to supply libnvme with a temporary buffer. To prevent a dangling
-    // pointer we are holding onto this buffer even though it won't be used
-    // directly by any future consumers as the library itself should be calling
-    // `nvme_log_req_set_output` again with the appropriately sized buffer.
-    buf: Vec<u8>,
     // This is the `Controller` the log request was created from.
     _phantom: PhantomData<&'a Controller<'a>>,
 }
@@ -61,11 +55,13 @@ impl LogPageName {
     }
 }
 
-fn get_logpage_size(
+/// Determine the actual size of an NVMe logpage, returning the original
+/// `NvmeLogReq` and the number of bytes needed to store the logpage data.
+fn get_logpage_size<'a>(
     controller: &Controller<'_>,
     disc: &NvmeLogDisc<'_>,
-    req: &mut NvmeLogReq<'_>,
-) -> Result<usize, NvmeControllerError> {
+    req: NvmeLogReq<'a>,
+) -> Result<(NvmeLogReq<'a>, usize), NvmeControllerError> {
     let mut len = 0;
     match unsafe { nvme_log_disc_size(disc.inner, &mut len) } {
         NVME_LOG_SIZE_K_VAR => {
@@ -73,13 +69,13 @@ fn get_logpage_size(
             // actual size.
             let mut actual_size_needed = 0;
             let len = len.try_into().expect("32-bit systems unsupported");
-            req.buf.resize(len, 0);
+            let mut buf = vec![0; len];
 
             controller.check_result(
                 unsafe {
                     nvme_log_req_set_output(
                         req.inner,
-                        req.buf.as_mut_ptr().cast(),
+                        buf.as_mut_ptr().cast(),
                         len,
                     )
                 },
@@ -94,7 +90,7 @@ fn get_logpage_size(
                     nvme_log_disc_calc_size(
                         disc.inner,
                         &mut actual_size_needed,
-                        req.buf.as_mut_ptr().cast(),
+                        buf.as_mut_ptr().cast(),
                         len,
                     )
                 },
@@ -106,11 +102,21 @@ fn get_logpage_size(
                 },
             )?;
 
-            Ok(actual_size_needed
-                .try_into()
-                .expect("32-bit systems unsupported"))
+            // Clean up the temporary req output so that it's not left with a
+            // dangling pointer after this function returns.
+            controller.check_result(
+                unsafe { nvme_log_req_clear_output(req.inner) },
+                || format!("failed to clear req log output while determining the full log page length for {:?}", req.page_name),
+            )?;
+
+            Ok((
+                req,
+                actual_size_needed
+                    .try_into()
+                    .expect("32-bit systems unsupported"),
+            ))
         }
-        _ => Ok(len.try_into().expect("32-bit systems unsupported")),
+        _ => Ok((req, len.try_into().expect("32-bit systems unsupported"))),
     }
 }
 
@@ -136,13 +142,12 @@ impl<'a> Controller<'a> {
         )?;
 
         let disc = NvmeLogDisc { inner: disc_ptr, _phantom: PhantomData };
-        let mut req = NvmeLogReq {
+        let req = NvmeLogReq {
             inner: req_ptr,
             page_name: name,
-            buf: Vec::new(),
             _phantom: PhantomData,
         };
-        let size = get_logpage_size(self, &disc, &mut req)?;
+        let (req, size) = get_logpage_size(self, &disc, req)?;
 
         Ok(LogPageInfo { size, req })
     }

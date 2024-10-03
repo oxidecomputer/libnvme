@@ -341,6 +341,7 @@ extern "C" {
         buf: *mut c_void,
         buflen: usize,
     ) -> bool;
+    pub fn nvme_log_req_clear_output(req: *mut nvme_log_req_t) -> bool;
     pub fn nvme_log_disc_calc_size(
         disc: *const nvme_log_disc_t,
         act: *mut u64,
