@@ -154,6 +154,16 @@ impl Drop for NamespaceInfo {
 }
 
 impl NamespaceInfo {
+    /// The namespace size in logical blocks.
+    pub fn size(&self) -> Result<u64, NvmeInfoError> {
+        let mut size = 0;
+        self.check_result(
+            unsafe { nvme_ns_info_size(self.0, &mut size) },
+            || "failed to get size of NVMe namespace",
+        )
+        .map(|_| size)
+    }
+
     pub fn current_format(&self) -> Result<LbaFormat<'_>, NvmeInfoError> {
         let mut lba: *const nvme_nvm_lba_fmt_t = std::ptr::null_mut();
         self.check_result(

@@ -380,6 +380,10 @@ extern "C" {
     pub fn nvme_ns_info_err(info: *mut nvme_ns_info_t) -> nvme_info_err_t;
     pub fn nvme_ns_info_errmsg(info: *mut nvme_ns_info_t) -> *const c_char;
     pub fn nvme_ns_info_syserr(info: *mut nvme_ns_info_t) -> c_int;
+    pub fn nvme_ns_info_size(
+        info: *mut nvme_ns_info_t,
+        sizep: *mut u64,
+    ) -> bool;
     pub fn nvme_ns_info_curformat(
         info: *mut nvme_ns_info_t,
         fmtp: *mut *const nvme_nvm_lba_fmt,
