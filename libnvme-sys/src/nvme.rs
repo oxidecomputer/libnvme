@@ -6,6 +6,7 @@ use bitfield_struct::bitfield;
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use super::devinfo::di_node;
+use super::identify::nvme_uint128_t;
 use super::opaque_type;
 
 pub const NVME_ERR_OK: nvme_err_t = 0;
@@ -176,6 +177,78 @@ pub struct nvme_fwslot_log_t {
     pub fw_frs: [[c_char; NVME_FWVER_SZ]; 7],
     _reserved2: [u8; 512 - 64],
 }
+
+#[bitfield(u8)]
+pub struct nvme_health_log_t_crit_warn {
+    /// available space too low
+    #[bits(1, access = RO)]
+    pub cw_avail: u8,
+    /// temperature too high
+    #[bits(1, access = RO)]
+    pub cw_temp: u8,
+    /// degraded reliability
+    #[bits(1, access = RO)]
+    pub cw_reliab: u8,
+    /// media is read-only
+    #[bits(1, access = RO)]
+    pub cw_readonly: u8,
+    /// volatile memory backup failed
+    #[bits(1, access = RO)]
+    pub cw_volatile: u8,
+    /// Persistent Memory Region R/O (1.4)
+    #[bits(1, access = RO)]
+    pub cw_pmrro: u8,
+    /// Indeterminate Personality State (2.3)
+    #[bits(1, access = RO)]
+    pub cw_ips: u8,
+    #[bits(1)]
+    __: u8, // cw_rsvd
+}
+
+/// SMART / Health information log page.
+#[repr(C, packed)]
+#[derive(Debug)]
+pub struct nvme_health_log_t {
+    pub hl_crit_warn: nvme_health_log_t_crit_warn,
+    pub hl_temp: u16,
+    pub hl_avail_spare: u8,
+    pub hl_avail_spare_thr: u8,
+    pub hl_used: u8,
+    pub hl_ecgcws: u8,
+    _hl_rsvd1: [u8; 32 - 7],
+    pub hl_data_read: nvme_uint128_t,
+    pub hl_data_write: nvme_uint128_t,
+    pub hl_host_read: nvme_uint128_t,
+    pub hl_host_write: nvme_uint128_t,
+    pub hl_ctrl_busy: nvme_uint128_t,
+    pub hl_power_cycles: nvme_uint128_t,
+    pub hl_power_on_hours: nvme_uint128_t,
+    pub hl_unsafe_shutdn: nvme_uint128_t,
+    pub hl_media_errors: nvme_uint128_t,
+    pub hl_errors_logged: nvme_uint128_t,
+    // Added in NVMe 1.2
+    pub hl_warn_temp_time: u32,
+    pub hl_crit_temp_time: u32,
+    pub hl_temp_sensor_1: u16,
+    pub hl_temp_sensor_2: u16,
+    pub hl_temp_sensor_3: u16,
+    pub hl_temp_sensor_4: u16,
+    pub hl_temp_sensor_5: u16,
+    pub hl_temp_sensor_6: u16,
+    pub hl_temp_sensor_7: u16,
+    pub hl_temp_sensor_8: u16,
+    // Added in NVMe 1.3
+    pub hl_tmtemp_1_tc: u32,
+    pub hl_tmtemp_2_tc: u32,
+    pub hl_tmtemp_1_time: u32,
+    pub hl_tmtemp_2_time: u32,
+    // Added in NVMe 2.3
+    pub hl_olec: u64,
+    pub hl_ipm: u32,
+    _hl_rsvd2: [u8; 512 - 244],
+}
+
+const _: () = assert!(std::mem::size_of::<nvme_health_log_t>() == 512);
 
 opaque_type!(nvme, nvme_t);
 opaque_type!(nvme_ctrl_iter, nvme_ctrl_iter_t);

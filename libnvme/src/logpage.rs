@@ -45,12 +45,14 @@ pub(crate) struct LogPageInfo<'a> {
 #[derive(Debug, Clone, Copy)]
 pub enum LogPageName {
     Firmware,
+    Health,
 }
 
 impl LogPageName {
     fn as_cstr(&self) -> &CStr {
         match self {
             LogPageName::Firmware => c"firmware",
+            LogPageName::Health => c"health",
         }
     }
 }
