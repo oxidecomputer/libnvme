@@ -178,6 +178,13 @@ pub struct nvme_fwslot_log_t {
     _reserved2: [u8; 512 - 64],
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct nvme_version_t {
+    pub v_minor: u16,
+    pub v_major: u16,
+}
+
 #[bitfield(u8)]
 pub struct nvme_health_log_t_crit_warn {
     /// available space too low
@@ -334,6 +341,9 @@ extern "C" {
     pub fn nvme_ctrl_info_model(ci: *mut nvme_ctrl_info_t) -> *const c_char;
     pub fn nvme_ctrl_info_serial(ci: *mut nvme_ctrl_info_t) -> *const c_char;
     pub fn nvme_ctrl_info_fwrev(ci: *mut nvme_ctrl_info_t) -> *const c_char;
+    pub fn nvme_ctrl_info_version(
+        ci: *mut nvme_ctrl_info_t,
+    ) -> *const nvme_version_t;
     pub fn nvme_ctrl_info_nns(ci: *mut nvme_ctrl_info_t) -> u32;
     pub fn nvme_ctrl_info_pci_vid(
         ci: *mut nvme_ctrl_info_t,
