@@ -20,6 +20,7 @@ mod logpage;
 pub mod namespace;
 mod util;
 mod wdc;
+pub mod wdc_devmgmt;
 
 use libnvme_sys::nvme::*;
 
