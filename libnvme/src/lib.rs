@@ -15,6 +15,7 @@ mod error;
 pub mod firmware;
 pub mod health;
 mod lba;
+pub mod log_discovery;
 mod logpage;
 pub mod namespace;
 mod util;

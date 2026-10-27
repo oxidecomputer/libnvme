@@ -144,6 +144,11 @@ pub const NVME_LOG_SIZE_K_FIXED: nvme_log_size_kind_t = 1;
 pub const NVME_LOG_SIZE_K_VAR: nvme_log_size_kind_t = 2;
 pub type nvme_log_size_kind_t = c_uint;
 
+pub const NVME_LOG_SCOPE_CTRL: nvme_log_disc_scope_t = 1 << 0;
+pub const NVME_LOG_SCOPE_NVM: nvme_log_disc_scope_t = 1 << 1;
+pub const NVME_LOG_SCOPE_NS: nvme_log_disc_scope_t = 1 << 2;
+pub type nvme_log_disc_scope_t = c_uint;
+
 // TODO: These come from nvme.h and should probably be pulled out into a NVMe
 //  spec crate at some point.
 pub const NVME_FWC_SAVE: u32 = 0;
@@ -268,6 +273,7 @@ opaque_type!(nvme_ns, nvme_ns_t);
 opaque_type!(nvme_ns_info, nvme_ns_info_t);
 opaque_type!(nvme_nvm_lba_fmt, nvme_nvm_lba_fmt_t);
 opaque_type!(nvme_format_req, nvme_format_req_t);
+opaque_type!(nvme_log_iter, nvme_log_iter_t);
 opaque_type!(nvme_log_disc, nvme_log_disc_t);
 opaque_type!(nvme_log_req, nvme_log_req_t);
 opaque_type!(nvme_fw_commit_req, nvme_fw_commit_req_t);
@@ -412,6 +418,23 @@ extern "C" {
     pub fn nvme_ns_bd_detach(ns: *mut nvme_ns_t) -> bool;
 
     // NVMe Log Page Discovery
+    pub fn nvme_log_disc_name(disc: *const nvme_log_disc_t) -> *const c_char;
+    pub fn nvme_log_disc_desc(disc: *const nvme_log_disc_t) -> *const c_char;
+    pub fn nvme_log_disc_scopes(
+        disc: *const nvme_log_disc_t,
+    ) -> nvme_log_disc_scope_t;
+    pub fn nvme_log_disc_impl(disc: *const nvme_log_disc_t) -> bool;
+    pub fn nvme_log_discover_init(
+        ctrl: *mut nvme_ctrl_t,
+        scope: nvme_log_disc_scope_t,
+        flags: u32,
+        iterp: *mut *mut nvme_log_iter_t,
+    ) -> bool;
+    pub fn nvme_log_discover_step(
+        iter: *mut nvme_log_iter_t,
+        discp: *mut *const nvme_log_disc_t,
+    ) -> nvme_iter_t;
+    pub fn nvme_log_discover_fini(iter: *mut nvme_log_iter_t);
     pub fn nvme_log_req_init_by_name(
         ctrl: *mut nvme_ctrl_t,
         name: *const c_char,
