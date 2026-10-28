@@ -2,17 +2,17 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use core::slice;
-use std::mem::{self, MaybeUninit};
+use std::mem;
 
 use libnvme_sys::nvme::*;
 use thiserror::Error;
+use zerocopy::{FromBytes, IntoBytes};
 
 use crate::{
     controller::{Controller, NvmeControllerError, WriteLockedController},
     controller_info::ControllerInfoIdentify,
     error::LibraryError,
-    logpage::{LogPageInfo, LogPageName},
+    logpage::{LogPageBytesError, LogPageName},
     NvmeError,
 };
 
@@ -80,9 +80,7 @@ impl FirmwareLogPage {
             // byte unless the slot itself is empty so we can't depend on
             // `CStr::from_ptr()`. Instead we have to take each slice of bytes
             // and check if the first byte is nul along the way.
-            let u8slot = unsafe {
-                slice::from_raw_parts(slot.as_ptr().cast::<u8>(), slot.len())
-            };
+            let u8slot = slot.as_bytes();
             if u8slot[0] == b'\0' {
                 firmware_slots.push(None);
                 continue;
@@ -155,33 +153,21 @@ impl<'a> Controller<'a> {
         &self,
     ) -> Result<FirmwareLogPage, FirmwareLogPageError> {
         let expected_size = mem::size_of::<nvme_fwslot_log_t>();
-        let LogPageInfo { size, req, .. } =
-            self.get_logpage(LogPageName::Firmware)?;
-        if size != expected_size {
-            return Err(FirmwareLogPageError::UnexpectedSize {
-                size,
-                expected_size,
-            });
-        }
-        let mut buf = MaybeUninit::<nvme_fwslot_log_t>::zeroed();
-        self.check_result(
-            unsafe {
-                nvme_log_req_set_output(
-                    req.inner,
-                    buf.as_mut_ptr().cast(),
-                    size,
-                )
+        let buf = self.get_logpage_bytes(LogPageName::Firmware).map_err(
+            |e| match e {
+                LogPageBytesError::Controller(e) => e.into(),
+                LogPageBytesError::TooLarge { size, .. } => {
+                    FirmwareLogPageError::UnexpectedSize { size, expected_size }
+                }
             },
-            || format!("failed to set logpage req size to {size}"),
         )?;
-
-        self.check_result(unsafe { nvme_log_req_exec(req.inner) }, || {
-            "failed to execute firmware log request"
-        })?;
-
-        // Our request was successful so we can assume this struct has been
-        // populated now.
-        let logpage = unsafe { buf.assume_init() };
+        let logpage =
+            nvme_fwslot_log_t::read_from_bytes(&buf).map_err(|_| {
+                FirmwareLogPageError::UnexpectedSize {
+                    size: buf.len(),
+                    expected_size,
+                }
+            })?;
         let controller_info = self.get_info()?;
         let identify = controller_info.get_controller_info_identify();
         Ok(FirmwareLogPage::init(&identify, logpage))

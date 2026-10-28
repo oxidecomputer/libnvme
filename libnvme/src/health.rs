@@ -2,15 +2,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::mem::{self, MaybeUninit};
+use std::mem;
 
 use libnvme_sys::{identify::nvme_uint128_t, nvme::*};
 use thiserror::Error;
+use zerocopy::FromBytes;
 
 use crate::{
     controller::{Controller, NvmeControllerError},
-    error::LibraryError,
-    logpage::{LogPageInfo, LogPageName},
+    logpage::{LogPageBytesError, LogPageName},
 };
 
 /// The Critical Warning field of the SMART / Health log page.
@@ -146,33 +146,25 @@ impl<'a> Controller<'a> {
         &self,
     ) -> Result<HealthLogPage, HealthLogPageError> {
         let expected_size = mem::size_of::<nvme_health_log_t>();
-        let LogPageInfo { size, req, .. } =
-            self.get_logpage(LogPageName::Health)?;
-        if size != expected_size {
-            return Err(HealthLogPageError::UnexpectedSize {
-                size,
-                expected_size,
-            });
-        }
-        let mut buf = MaybeUninit::<nvme_health_log_t>::zeroed();
-        self.check_result(
-            unsafe {
-                nvme_log_req_set_output(
-                    req.inner,
-                    buf.as_mut_ptr().cast(),
-                    size,
-                )
-            },
-            || format!("failed to set logpage req size to {size}"),
-        )?;
-
-        self.check_result(unsafe { nvme_log_req_exec(req.inner) }, || {
-            "failed to execute health log request"
-        })?;
-
-        // Our request was successful so we can assume this struct has been
-        // populated now.
-        let logpage = unsafe { buf.assume_init() };
+        let buf =
+            self.get_logpage_bytes(LogPageName::Health).map_err(
+                |e| match e {
+                    LogPageBytesError::Controller(e) => e.into(),
+                    LogPageBytesError::TooLarge { size, .. } => {
+                        HealthLogPageError::UnexpectedSize {
+                            size,
+                            expected_size,
+                        }
+                    }
+                },
+            )?;
+        let logpage =
+            nvme_health_log_t::read_from_bytes(&buf).map_err(|_| {
+                HealthLogPageError::UnexpectedSize {
+                    size: buf.len(),
+                    expected_size,
+                }
+            })?;
         Ok(HealthLogPage::init(logpage))
     }
 }

@@ -160,6 +160,7 @@ pub const NVME_FWC_ACTIVATE_IMMED: u32 = 3;
 const NVME_FWVER_SZ: usize = 8;
 
 #[bitfield(u8)]
+#[derive(FromBytes)]
 pub struct nvme_fwslot_log_t_bitfield1 {
     /// Active Firmware Slot
     #[bits(3, access = RO)]
@@ -175,7 +176,7 @@ pub struct nvme_fwslot_log_t_bitfield1 {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, FromBytes)]
 pub struct nvme_fwslot_log_t {
     // fw_afi and fw_next
     pub bitfield1: nvme_fwslot_log_t_bitfield1,
@@ -192,6 +193,7 @@ pub struct nvme_version_t {
 }
 
 #[bitfield(u8)]
+#[derive(FromBytes)]
 pub struct nvme_health_log_t_crit_warn {
     /// available space too low
     #[bits(1, access = RO)]
@@ -220,7 +222,7 @@ pub struct nvme_health_log_t_crit_warn {
 
 /// SMART / Health information log page.
 #[repr(C, packed)]
-#[derive(Debug)]
+#[derive(Debug, FromBytes)]
 pub struct nvme_health_log_t {
     pub hl_crit_warn: nvme_health_log_t_crit_warn,
     pub hl_temp: u16,

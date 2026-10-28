@@ -5,9 +5,10 @@
 use std::ffi::c_char;
 
 use bitfield_struct::bitfield;
+use zerocopy::FromBytes;
 
 #[repr(C, packed)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, FromBytes)]
 pub struct nvme_uint128_t {
     pub lo: u64,
     pub hi: u64,
