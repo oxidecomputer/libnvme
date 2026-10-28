@@ -8,3 +8,4 @@ edition = "2021"
 libnvme-sys.workspace = true
 nvme.workspace = true
 thiserror.workspace = true
+zerocopy.workspace = true

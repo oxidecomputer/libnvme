@@ -4,6 +4,7 @@
 
 use bitfield_struct::bitfield;
 use std::ffi::{c_char, c_int, c_uint, c_void};
+use zerocopy::{FromBytes, Immutable, KnownLayout, Unaligned};
 
 use super::devinfo::di_node;
 use super::identify::nvme_uint128_t;
@@ -261,6 +262,28 @@ pub struct nvme_health_log_t {
 }
 
 const _: () = assert!(std::mem::size_of::<nvme_health_log_t>() == 512);
+
+/// WDC SN840 EOL log page (`wdc/eol`), from `sys/nvme/wdc_sn840.h`.
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone, FromBytes, KnownLayout, Immutable, Unaligned)]
+pub struct wdc_vul_sn840_eol_t {
+    eol_rsvd0: [u8; 76],
+    pub eol_rbc: u32,
+    eol_rsvd1: [u8; 4],
+    pub eol_waf: u32,
+    pub eol_plr: u32,
+    eol_rsvd2: [u8; 4],
+    pub eol_pfc: u32,
+    pub eol_efc: u32,
+    eol_rss3: [u8; 4],
+    pub eol_vendor: u32,
+    pub eol_cust_sts: u16,
+    pub eol_sys_sts: u16,
+    pub eol_cust_state: u8,
+    pub eol_sys_state: u8,
+}
+
+const _: () = assert!(std::mem::size_of::<wdc_vul_sn840_eol_t>() == 118);
 
 opaque_type!(nvme, nvme_t);
 opaque_type!(nvme_ctrl_iter, nvme_ctrl_iter_t);

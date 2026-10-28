@@ -32,6 +32,7 @@ fn main() {
     }
 
     cfg.header("libnvme.h");
+    cfg.header("sys/nvme/wdc_sn840.h");
 
     cfg.skip_struct(|name| match name {
         // Skip over the opaque types

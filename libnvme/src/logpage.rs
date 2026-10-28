@@ -66,6 +66,7 @@ pub enum LogPageName {
     Firmware,
     Health,
     WdcDevMgmt,
+    WdcEol,
 }
 
 impl LogPageName {
@@ -74,6 +75,7 @@ impl LogPageName {
             LogPageName::Firmware => c"firmware",
             LogPageName::Health => c"health",
             LogPageName::WdcDevMgmt => c"wdc/devmgmt",
+            LogPageName::WdcEol => c"wdc/eol",
         }
     }
 }
