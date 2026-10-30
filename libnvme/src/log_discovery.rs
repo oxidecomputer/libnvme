@@ -106,4 +106,19 @@ impl<'a> Controller<'a> {
     ) -> Result<LogDiscovery<'_>, NvmeControllerError> {
         LogDiscovery::new(self, NVME_LOG_SCOPE_CTRL | NVME_LOG_SCOPE_NVM)
     }
+
+    /// The log pages from [`Controller::log_page_discovery`] that the
+    /// controller implements.
+    pub fn implemented_log_pages(
+        &self,
+    ) -> Result<Vec<LogPageDisc>, NvmeControllerError> {
+        let mut pages = Vec::new();
+        for disc in self.log_page_discovery()? {
+            let disc = disc?;
+            if disc.implemented {
+                pages.push(disc);
+            }
+        }
+        Ok(pages)
+    }
 }

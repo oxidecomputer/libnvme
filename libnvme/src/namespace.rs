@@ -164,6 +164,12 @@ impl NamespaceInfo {
         .map(|_| size)
     }
 
+    /// The namespace size in bytes, computed as `nvmeadm list` does: the
+    /// size in logical blocks times the current format's data size.
+    pub fn size_bytes(&self) -> Result<u64, NvmeInfoError> {
+        Ok(self.size()?.saturating_mul(self.current_format()?.data_size()))
+    }
+
     pub fn current_format(&self) -> Result<LbaFormat<'_>, NvmeInfoError> {
         let mut lba: *const nvme_nvm_lba_fmt_t = std::ptr::null_mut();
         self.check_result(
