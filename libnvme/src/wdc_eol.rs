@@ -49,12 +49,38 @@ pub struct EolLog {
     /// System area EOL status, the percentage of rated life used
     /// (`eol_sys_sts`).
     pub system_area_eol_status: u16,
-    /// Customer EOL state (`eol_cust_state`): per nvme-cli, 0 is normal, 1 is
-    /// end of life, and 2 is read only.
-    pub customer_eol_state: u8,
-    /// System area EOL state (`eol_sys_state`), with the same values as
-    /// `customer_eol_state`.
-    pub system_area_eol_state: u8,
+    /// Customer EOL state (`eol_cust_state`).
+    pub customer_eol_state: EolState,
+    /// System area EOL state (`eol_sys_state`).
+    pub system_area_eol_state: EolState,
+}
+
+/// An EOL state field of the EOL log page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "snake_case")
+)]
+pub enum EolState {
+    /// 00h: normal mode.
+    Normal,
+    /// 01h: end of life (EOL status is over 100%).
+    EndOfLife,
+    /// 02h: read only mode.
+    ReadOnly,
+    Unknown(u8),
+}
+
+impl From<u8> for EolState {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => Self::Normal,
+            1 => Self::EndOfLife,
+            2 => Self::ReadOnly,
+            state => Self::Unknown(state),
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -82,8 +108,8 @@ impl EolLog {
             vendor_data: eol.eol_vendor,
             customer_eol_status: eol.eol_cust_sts,
             system_area_eol_status: eol.eol_sys_sts,
-            customer_eol_state: eol.eol_cust_state,
-            system_area_eol_state: eol.eol_sys_state,
+            customer_eol_state: eol.eol_cust_state.into(),
+            system_area_eol_state: eol.eol_sys_state.into(),
         })
     }
 }
@@ -138,10 +164,18 @@ mod tests {
                 vendor_data: 0x135,
                 customer_eol_status: 157,
                 system_area_eol_status: 0,
-                customer_eol_state: 1,
-                system_area_eol_state: 0,
+                customer_eol_state: EolState::EndOfLife,
+                system_area_eol_state: EolState::Normal,
             }
         );
+    }
+
+    #[test]
+    fn eol_state_values() {
+        assert_eq!(EolState::from(0), EolState::Normal);
+        assert_eq!(EolState::from(1), EolState::EndOfLife);
+        assert_eq!(EolState::from(2), EolState::ReadOnly);
+        assert_eq!(EolState::from(3), EolState::Unknown(3));
     }
 
     #[test]
