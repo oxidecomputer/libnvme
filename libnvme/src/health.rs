@@ -37,6 +37,21 @@ pub struct CriticalWarnings {
     pub indeterminate_personality_state: Option<bool>,
 }
 
+/// The Endurance Group Critical Warning Summary field of the SMART / Health
+/// log page (1.4). Each is `true` if that warning is raised for one or more
+/// Endurance Groups.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct EnduranceGroupWarnings {
+    /// Available spare capacity has fallen below the threshold.
+    pub available_spare_low: bool,
+    /// Reliability is degraded due to media or internal errors.
+    pub reliability_degraded: bool,
+    /// Namespaces have been placed in read-only mode, other than by a change
+    /// in their write protection state.
+    pub read_only: bool,
+}
+
 /// The SMART / Health log page for an NVMe controller.
 ///
 /// Temperatures are converted to Celsius and data units to bytes. A field
@@ -47,6 +62,8 @@ pub struct CriticalWarnings {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HealthLogPage {
     pub critical_warnings: CriticalWarnings,
+    /// Endurance Group critical warnings (1.4).
+    pub endurance_group_warnings: Option<EnduranceGroupWarnings>,
     /// Composite temperature. `None` if the controller reports 0 K.
     pub temperature_c: Option<i32>,
     /// Normalized percentage of remaining spare capacity.
@@ -172,6 +189,14 @@ impl HealthLogPage {
                     .at_least(2, 3)
                     .then_some(cw.cw_ips() != 0),
             },
+            endurance_group_warnings: ctx.at_least(1, 4).then(|| {
+                let eg = logpage.hl_ecgcws;
+                EnduranceGroupWarnings {
+                    available_spare_low: eg.ecgws_egascbt() != 0,
+                    reliability_degraded: eg.ecgws_egdr() != 0,
+                    read_only: eg.ecgws_egro() != 0,
+                }
+            }),
             temperature_c: kelvin_to_c(logpage.hl_temp),
             available_spare_percent: logpage.hl_avail_spare,
             available_spare_threshold_percent: logpage.hl_avail_spare_thr,
@@ -333,6 +358,32 @@ mod tests {
     }
 
     #[test]
+    fn endurance_group_warnings() {
+        let eg = |bits| {
+            let mut log = micron_sample();
+            log.hl_ecgcws = nvme_health_log_t_ecgcws::from_bits(bits);
+            HealthLogPage::init(log, &CTX).endurance_group_warnings
+        };
+        // Bit 1 is reserved, and ignored.
+        assert_eq!(
+            eg(0b1111),
+            Some(EnduranceGroupWarnings {
+                available_spare_low: true,
+                reliability_degraded: true,
+                read_only: true,
+            })
+        );
+        assert_eq!(
+            eg(0b0100),
+            Some(EnduranceGroupWarnings {
+                available_spare_low: false,
+                reliability_degraded: true,
+                read_only: false,
+            })
+        );
+    }
+
+    #[test]
     fn version_gating() {
         let h = HealthLogPage::init(micron_sample(), &CTX);
         assert_eq!(
@@ -347,6 +398,7 @@ mod tests {
             h.critical_warnings.persistent_memory_region_read_only,
             None
         );
+        assert_eq!(h.endurance_group_warnings, None);
         assert!(h.temperature_sensors.is_empty());
         assert_eq!(h.warning_temperature_minutes, None);
         assert!(h.thermal_management.is_none());

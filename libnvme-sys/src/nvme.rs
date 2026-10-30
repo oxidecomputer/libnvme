@@ -220,6 +220,24 @@ pub struct nvme_health_log_t_crit_warn {
     __: u8, // cw_rsvd
 }
 
+#[bitfield(u8)]
+#[derive(FromBytes)]
+pub struct nvme_health_log_t_ecgcws {
+    /// Endurance Group available spare low (1.4)
+    #[bits(1, access = RO)]
+    pub ecgws_egascbt: u8,
+    #[bits(1)]
+    __: u8, // ecgws_rsvd1
+    /// Endurance Group degraded reliability (1.4)
+    #[bits(1, access = RO)]
+    pub ecgws_egdr: u8,
+    /// Endurance Group read-only (1.4)
+    #[bits(1, access = RO)]
+    pub ecgws_egro: u8,
+    #[bits(4)]
+    __: u8, // ecgws_rsvd
+}
+
 /// SMART / Health information log page.
 #[repr(C, packed)]
 #[derive(Debug, FromBytes)]
@@ -229,7 +247,7 @@ pub struct nvme_health_log_t {
     pub hl_avail_spare: u8,
     pub hl_avail_spare_thr: u8,
     pub hl_used: u8,
-    pub hl_ecgcws: u8,
+    pub hl_ecgcws: nvme_health_log_t_ecgcws,
     _hl_rsvd1: [u8; 32 - 7],
     pub hl_data_read: nvme_uint128_t,
     pub hl_data_write: nvme_uint128_t,
