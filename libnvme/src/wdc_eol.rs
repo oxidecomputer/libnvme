@@ -103,7 +103,9 @@ impl EolLog {
         Ok(EolLog {
             reallocated_block_count: eol.eol_rbc,
             write_amplification_factor: eol.eol_waf,
-            percentage_life_remaining: eol.eol_plr as i32,
+            // Defined as unsigned, but SN840s report a signed value once past
+            // their rated endurance; it matches 100 - `eol_cust_sts`.
+            percentage_life_remaining: eol.eol_plr.cast_signed(),
             program_fail_count: eol.eol_pfc,
             erase_fail_count: eol.eol_efc,
             vendor_data: eol.eol_vendor,
