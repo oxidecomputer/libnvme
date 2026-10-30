@@ -26,6 +26,7 @@ const EOL_LOG_LEN: usize = mem::size_of::<wdc_vul_sn840_eol_t>();
 /// The decoded EOL log page. Field names follow nvmeadm's descriptions; the
 /// illumos field name is given for each.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EolLog {
     /// Reallocated block count (`eol_rbc`).
     pub reallocated_block_count: u32,

@@ -19,6 +19,9 @@ use crate::{
     logpage::{LogPageBytesError, LogPageName},
 };
 
+/// The text an unset customer identifier entry holds.
+const UNSET_CUSTOMER_ID: &str = "CUSTOMER_ID_GENERIC";
+
 /// Size of an entry header (and of the log header).
 const VSD_HDR_LEN: usize = 8;
 
@@ -33,6 +36,7 @@ const VSD_HDR_LEN: usize = 8;
 /// simple approach that makes the decoded data easier to use than if every
 /// field were a `Vec`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DevMgmtLog {
     /// Log version (the identifier of the log header).
     pub version: u32,
@@ -106,34 +110,60 @@ pub struct DevMgmtLog {
     pub vca_tpc_rst_seq: Option<u32>,
     /// 0x23
     pub vca_tpc_fss_seq: Option<u32>,
-    /// Entries with identifiers illumos doesn't define, in log order.
+    /// Entries with identifiers illumos doesn't define, in log order,
+    /// skipping unset customer identifiers.
     pub unknown: Vec<UnknownEntry>,
 }
 
-/// An entry with an unknown identifier, kept as its raw data.
+/// An entry with an unknown identifier.
+///
+/// In practice SN840s report four (0x24 through 0x27), each containing the
+/// string "CUSTOMER_ID_GENERIC". These appear to be unset customer
+/// identifiers; neither illumos nor nvme-cli interprets them, and they are
+/// left out of [`DevMgmtLog::unknown`].
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UnknownEntry {
     pub id: u32,
-    pub data: Vec<u8>,
+    pub value: UnknownValue,
 }
 
-impl UnknownEntry {
-    /// Return the unknown value as a `String` if it cleanly decodes to one.
-    /// In practice the four unknown entries (0x24 through 0x27) contain the
-    /// string "CUSTOMER_ID_GENERIC".
-    pub fn as_text(&self) -> Option<String> {
-        let text = cbs(&self.data)?;
-        let padding = &self.data[4 + text.len()..];
-        let text = text.strip_suffix(&[0]).unwrap_or(text);
-        if text.is_empty()
-            || padding.len() > 3
-            || padding.iter().any(|&b| b != 0)
-            || !text.iter().all(|&b| b.is_ascii_graphic() || b == b' ')
-        {
-            return None;
+/// The value of an [`UnknownEntry`]: text if it cleanly decodes as a WDC
+/// counted byte string, otherwise the raw data.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "snake_case")
+)]
+pub enum UnknownValue {
+    Text(String),
+    Bytes(Vec<u8>),
+}
+
+impl UnknownValue {
+    fn decode(data: &[u8]) -> Self {
+        match cbs_text(data) {
+            Some(text) => Self::Text(text),
+            None => Self::Bytes(data.to_vec()),
         }
-        Some(String::from_utf8_lossy(text).into_owned())
     }
+}
+
+/// Decode `data` as a WDC counted byte string, strictly: it must hold
+/// printable text and nothing but zero padding to a 4-byte boundary.
+fn cbs_text(data: &[u8]) -> Option<String> {
+    let text = cbs(data)?;
+    let padding = &data[4 + text.len()..];
+    let text = text.strip_suffix(&[0]).unwrap_or(text);
+    if text.is_empty()
+        || padding.len() > 3
+        || padding.iter().any(|&b| b != 0)
+        || !text.iter().all(|&b| b.is_ascii_graphic() || b == b' ')
+    {
+        return None;
+    }
+    Some(String::from_utf8_lossy(text).into_owned())
 }
 
 #[derive(Debug, Error)]
@@ -258,7 +288,11 @@ impl DevMgmtLog {
             0x22 => put(&mut self.vca_tpc_rst_seq, u32_at(data, 0)),
             0x23 => put(&mut self.vca_tpc_fss_seq, u32_at(data, 0)),
             _ => {
-                self.unknown.push(UnknownEntry { id, data: data.to_vec() });
+                let value = UnknownValue::decode(data);
+                if !matches!(&value, UnknownValue::Text(t) if t == UNSET_CUSTOMER_ID)
+                {
+                    self.unknown.push(UnknownEntry { id, value });
+                }
                 true
             }
         }
@@ -367,12 +401,25 @@ mod tests {
         assert_eq!(log.def_user_cap, Some(3_840_755_982_336));
         assert_eq!(log.cust_eol_sts, Some(8));
         assert_eq!(log.vca_tpc_fss_seq, Some(45));
-        // Identifiers illumos doesn't name are kept, and read as text.
-        let ids: Vec<u32> = log.unknown.iter().map(|e| e.id).collect();
-        assert_eq!(ids, [0x24, 0x25, 0x26, 0x27]);
-        for e in &log.unknown {
-            assert_eq!(e.as_text().as_deref(), Some("CUSTOMER_ID_GENERIC"));
+        // The only unknown entries, 0x24 through 0x27, are unset customer
+        // identifiers.
+        assert!(log.unknown.is_empty());
+    }
+
+    #[test]
+    fn keeps_unknown_entries() {
+        // Log header plus an unknown entry holding the string "ACME".
+        let mut buf = Vec::new();
+        for word in [24u32, 0, 16, 0x25, 4, u32::from_le_bytes(*b"ACME")] {
+            buf.extend_from_slice(&word.to_le_bytes());
         }
+        assert_eq!(
+            DevMgmtLog::parse(&buf).unwrap().unknown,
+            [UnknownEntry {
+                id: 0x25,
+                value: UnknownValue::Text("ACME".into())
+            }]
+        );
     }
 
     #[test]
@@ -386,22 +433,28 @@ mod tests {
     }
 
     #[test]
-    fn as_text_is_strict() {
-        let entry =
-            |data: &[u8]| UnknownEntry { id: 0x24, data: data.to_vec() };
-        assert_eq!(entry(b"\x02\0\0\0hi\0\0").as_text().as_deref(), Some("hi"));
+    fn unknown_value_text_is_strict() {
+        assert_eq!(
+            UnknownValue::decode(b"\x02\0\0\0hi\0\0"),
+            UnknownValue::Text("hi".into())
+        );
+        assert_eq!(
+            UnknownValue::decode(&7u32.to_le_bytes()),
+            UnknownValue::Bytes(7u32.to_le_bytes().to_vec())
+        );
+        assert_eq!(cbs_text(b"\x02\0\0\0hi\0\0").as_deref(), Some("hi"));
         // A bare u32 value.
-        assert_eq!(entry(&7u32.to_le_bytes()).as_text(), None);
+        assert_eq!(cbs_text(&7u32.to_le_bytes()), None);
         // Zero length.
-        assert_eq!(entry(b"\0\0\0\0\0\0\0\0").as_text(), None);
+        assert_eq!(cbs_text(b"\0\0\0\0\0\0\0\0"), None);
         // Length past the end.
-        assert_eq!(entry(b"\x09\0\0\0hi\0\0").as_text(), None);
+        assert_eq!(cbs_text(b"\x09\0\0\0hi\0\0"), None);
         // Non-zero padding.
-        assert_eq!(entry(b"\x02\0\0\0hi\0x").as_text(), None);
+        assert_eq!(cbs_text(b"\x02\0\0\0hi\0x"), None);
         // Too much padding.
-        assert_eq!(entry(b"\x02\0\0\0hi\0\0\0\0").as_text(), None);
+        assert_eq!(cbs_text(b"\x02\0\0\0hi\0\0\0\0"), None);
         // Non-printable text.
-        assert_eq!(entry(b"\x02\0\0\0h\x01\0\0").as_text(), None);
+        assert_eq!(cbs_text(b"\x02\0\0\0h\x01\0\0"), None);
     }
 
     #[test]
