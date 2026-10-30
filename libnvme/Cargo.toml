@@ -7,5 +7,6 @@ edition = "2021"
 [dependencies]
 libnvme-sys.workspace = true
 nvme.workspace = true
+serde = { workspace = true, optional = true }
 thiserror.workspace = true
 zerocopy.workspace = true
