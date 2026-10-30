@@ -32,6 +32,7 @@ fn main() {
     }
 
     cfg.header("libnvme.h");
+    cfg.header("sys/nvme/wdc_sn840.h");
 
     cfg.skip_struct(|name| match name {
         // Skip over the opaque types
@@ -44,6 +45,7 @@ fn main() {
         "nvme_ns_disc" => true,
         "nvme_ns" => true,
         "nvme_ns_info" => true,
+        "nvme_log_iter" => true,
         "nvme_log_disc" => true,
         "nvme_log_req" => true,
         "nvme_nvm_lba_fmt" => true,
@@ -62,6 +64,9 @@ fn main() {
         "nvme_idctl_psd_t_chunk_2" => true,
         "nvme_idctl_psd_t_chunk_3" => true,
         "nvme_fwslot_log_t_bitfield1" => true,
+        "nvme_health_log_t" => true,
+        "nvme_health_log_t_crit_warn" => true,
+        "nvme_health_log_t_ecgcws" => true,
         "IdMic" => true,
         "IdOaes" => true,
         "IdCtratt" => true,
@@ -101,6 +106,7 @@ fn main() {
         "nvme_ns_disc_t" => true,
         "nvme_ns_t" => true,
         "nvme_ns_info_t" => true,
+        "nvme_log_iter_t" => true,
         "nvme_log_disc_t" => true,
         "nvme_log_req_t" => true,
         "nvme_nvm_lba_fmt_t" => true,
@@ -119,6 +125,9 @@ fn main() {
         "nvme_idctl_psd_t_chunk_2" => true,
         "nvme_idctl_psd_t_chunk_3" => true,
         "nvme_fwslot_log_t_bitfield1" => true,
+        "nvme_health_log_t" => true,
+        "nvme_health_log_t_crit_warn" => true,
+        "nvme_health_log_t_ecgcws" => true,
         "IdMic" => true,
         "IdOaes" => true,
         "IdCtratt" => true,

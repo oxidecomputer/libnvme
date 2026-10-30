@@ -118,6 +118,32 @@ impl ControllerInfo {
         }
     }
 
+    /// The NVMe version the controller implements, as `(major, minor)`.
+    pub fn version(&self) -> (u16, u16) {
+        let vers = unsafe { &*nvme_ctrl_info_version(self.0) };
+        (vers.v_major, vers.v_minor)
+    }
+
+    /// Whether the controller has a volatile write cache.
+    pub fn volatile_write_cache_present(&self) -> bool {
+        let identify = self.get_controller_info_identify();
+        unsafe { (*identify.inner).id_vwc.vwc_present() != 0 }
+    }
+
+    /// Warning Composite Temperature Threshold in Kelvin, or 0 if the
+    /// controller does not report one (1.2).
+    pub fn warning_composite_temp(&self) -> u16 {
+        let identify = self.get_controller_info_identify();
+        unsafe { (*identify.inner).ap_wctemp }
+    }
+
+    /// Critical Composite Temperature Threshold in Kelvin, or 0 if the
+    /// controller does not report one (1.2).
+    pub fn critical_composite_temp(&self) -> u16 {
+        let identify = self.get_controller_info_identify();
+        unsafe { (*identify.inner).ap_cctemp }
+    }
+
     pub fn num_namespaces(&self) -> u32 {
         unsafe { nvme_ctrl_info_nns(self.0) }
     }

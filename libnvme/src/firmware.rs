@@ -2,17 +2,17 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use core::slice;
-use std::mem::{self, MaybeUninit};
+use std::mem;
 
 use libnvme_sys::nvme::*;
 use thiserror::Error;
+use zerocopy::{FromBytes, IntoBytes};
 
 use crate::{
     controller::{Controller, NvmeControllerError, WriteLockedController},
     controller_info::ControllerInfoIdentify,
     error::LibraryError,
-    logpage::{LogPageInfo, LogPageName},
+    logpage::{LogPageBytesError, LogPageName},
     NvmeError,
 };
 
@@ -80,9 +80,7 @@ impl FirmwareLogPage {
             // byte unless the slot itself is empty so we can't depend on
             // `CStr::from_ptr()`. Instead we have to take each slice of bytes
             // and check if the first byte is nul along the way.
-            let u8slot = unsafe {
-                slice::from_raw_parts(slot.as_ptr().cast::<u8>(), slot.len())
-            };
+            let u8slot = slot.as_bytes();
             if u8slot[0] == b'\0' {
                 firmware_slots.push(None);
                 continue;
@@ -114,6 +112,21 @@ impl FirmwareLogPage {
             Some(slot) => Ok(slot.as_deref()),
             None => Err(NvmeSlotError::DoesNotExisit(slot.0)),
         }
+    }
+
+    /// The firmware version the controller will run after the next
+    /// Controller Level Reset, if that differs from the active slot.
+    ///
+    /// Returns `None` when the next slot is the active slot, when the
+    /// controller doesn't say which slot comes next, or when that slot is
+    /// empty.
+    pub fn next_version(&self) -> Option<&str> {
+        let next = self.next_active_slot?;
+        if next == self.active_slot {
+            return None;
+        }
+        let slot = NvmeSlot::try_from(next).ok()?;
+        self.get_slot_version(slot).ok().flatten()
     }
 
     /// Returns an iterator over the firmware slots.
@@ -155,33 +168,21 @@ impl<'a> Controller<'a> {
         &self,
     ) -> Result<FirmwareLogPage, FirmwareLogPageError> {
         let expected_size = mem::size_of::<nvme_fwslot_log_t>();
-        let LogPageInfo { size, req, .. } =
-            self.get_logpage(LogPageName::Firmware)?;
-        if size != expected_size {
-            return Err(FirmwareLogPageError::UnexpectedSize {
-                size,
-                expected_size,
-            });
-        }
-        let mut buf = MaybeUninit::<nvme_fwslot_log_t>::zeroed();
-        self.check_result(
-            unsafe {
-                nvme_log_req_set_output(
-                    req.inner,
-                    buf.as_mut_ptr().cast(),
-                    size,
-                )
+        let buf = self.get_logpage_bytes(LogPageName::Firmware).map_err(
+            |e| match e {
+                LogPageBytesError::Controller(e) => e.into(),
+                LogPageBytesError::TooLarge { size, .. } => {
+                    FirmwareLogPageError::UnexpectedSize { size, expected_size }
+                }
             },
-            || format!("failed to set logpage req size to {size}"),
         )?;
-
-        self.check_result(unsafe { nvme_log_req_exec(req.inner) }, || {
-            "failed to execute firmware log request"
-        })?;
-
-        // Our request was successful so we can assume this struct has been
-        // populated now.
-        let logpage = unsafe { buf.assume_init() };
+        let logpage =
+            nvme_fwslot_log_t::read_from_bytes(&buf).map_err(|_| {
+                FirmwareLogPageError::UnexpectedSize {
+                    size: buf.len(),
+                    expected_size,
+                }
+            })?;
         let controller_info = self.get_info()?;
         let identify = controller_info.get_controller_info_identify();
         Ok(FirmwareLogPage::init(&identify, logpage))
@@ -335,5 +336,40 @@ impl<'ctrl> FirmwareCommitRequestBuilder<'ctrl> {
             .check_result(unsafe { nvme_fw_commit_req_exec(self.req) }, || {
                 "failed to execute firmware commit request"
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample(
+        active_slot: u8,
+        next_active_slot: Option<u8>,
+    ) -> FirmwareLogPage {
+        FirmwareLogPage {
+            active_slot,
+            next_active_slot,
+            slot1_is_read_only: false,
+            number_of_slots: 3,
+            firmware_slot_versions: vec![
+                Some("R1410004".to_string()),
+                Some("R1410005".to_string()),
+                None,
+            ],
+        }
+    }
+
+    #[test]
+    fn next_version() {
+        // The controller doesn't say which slot is next.
+        assert_eq!(sample(1, None).next_version(), None);
+        // The next slot is the active slot.
+        assert_eq!(sample(1, Some(1)).next_version(), None);
+        // A different slot is next.
+        assert_eq!(sample(1, Some(2)).next_version(), Some("R1410005"));
+        // The next slot is empty or doesn't exist.
+        assert_eq!(sample(1, Some(3)).next_version(), None);
+        assert_eq!(sample(1, Some(5)).next_version(), None);
     }
 }

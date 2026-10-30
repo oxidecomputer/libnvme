@@ -9,4 +9,6 @@ members = [
 [workspace.dependencies]
 nvme = { path = "nvme" }
 libnvme-sys = { path = "libnvme-sys" }
+serde = { version = "1", features = ["derive"] }
 thiserror = "1.0.51"
+zerocopy = { version = "0.8.26", features = ["derive"] }

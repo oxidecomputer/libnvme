@@ -37,6 +37,25 @@ impl<'a> Drop for NvmeLogDisc<'a> {
     }
 }
 
+/// The largest log page we will fetch: the illumos nvme driver's limit on the
+/// size of a log page (`nvme_log_page_max_size` in
+/// `uts/common/io/nvme/nvme_validate.c`, 1 MiB). A larger size reported by a
+/// device can not be read, so return an error before allocating a buffer for
+/// it.
+pub(crate) const LOG_PAGE_MAX_SIZE: usize = 1024 * 1024;
+
+/// Errors from [`Controller::get_logpage_bytes`].
+pub(crate) enum LogPageBytesError {
+    Controller(NvmeControllerError),
+    TooLarge { size: usize, max: usize },
+}
+
+impl From<NvmeControllerError> for LogPageBytesError {
+    fn from(e: NvmeControllerError) -> Self {
+        LogPageBytesError::Controller(e)
+    }
+}
+
 pub(crate) struct LogPageInfo<'a> {
     pub(crate) size: usize,
     pub(crate) req: NvmeLogReq<'a>,
@@ -45,12 +64,18 @@ pub(crate) struct LogPageInfo<'a> {
 #[derive(Debug, Clone, Copy)]
 pub enum LogPageName {
     Firmware,
+    Health,
+    WdcDevMgmt,
+    WdcEol,
 }
 
 impl LogPageName {
     fn as_cstr(&self) -> &CStr {
         match self {
             LogPageName::Firmware => c"firmware",
+            LogPageName::Health => c"health",
+            LogPageName::WdcDevMgmt => c"wdc/devmgmt",
+            LogPageName::WdcEol => c"wdc/eol",
         }
     }
 }
@@ -150,5 +175,40 @@ impl<'a> Controller<'a> {
         let (req, size) = get_logpage_size(self, &disc, req)?;
 
         Ok(LogPageInfo { size, req })
+    }
+
+    /// Fetch a log page into a buffer of the size libnvme reports, which for
+    /// variable length log pages is determined from the page itself.
+    ///
+    /// That size comes from the device, so it is checked against
+    /// [`LOG_PAGE_MAX_SIZE`] before anything is allocated.
+    pub(crate) fn get_logpage_bytes(
+        &self,
+        name: LogPageName,
+    ) -> Result<Vec<u8>, LogPageBytesError> {
+        let LogPageInfo { size, req } = self.get_logpage(name)?;
+        if size > LOG_PAGE_MAX_SIZE {
+            return Err(LogPageBytesError::TooLarge {
+                size,
+                max: LOG_PAGE_MAX_SIZE,
+            });
+        }
+        let mut buf = vec![0u8; size];
+        self.check_result(
+            unsafe {
+                nvme_log_req_set_output(
+                    req.inner,
+                    buf.as_mut_ptr().cast(),
+                    buf.len(),
+                )
+            },
+            || format!("failed to set logpage req size to {size} for {name:?}"),
+        )?;
+        self.check_result(unsafe { nvme_log_req_exec(req.inner) }, || {
+            format!("failed to execute log request for {name:?}")
+        })?;
+        // Finish the request before handing back the buffer it points at.
+        drop(req);
+        Ok(buf)
     }
 }
