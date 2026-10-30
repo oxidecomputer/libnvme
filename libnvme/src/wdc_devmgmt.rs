@@ -17,6 +17,7 @@ use thiserror::Error;
 use crate::{
     controller::{Controller, NvmeControllerError},
     logpage::{LogPageBytesError, LogPageName},
+    wdc_eol::EolState,
 };
 
 /// The text an unset customer identifier entry holds.
@@ -87,7 +88,7 @@ pub struct DevMgmtLog {
     /// 0x17
     pub tmm_ver: Option<String>,
     /// 0x18
-    pub therm_throt_sts: Option<u32>,
+    pub therm_throt_sts: Option<ThermalThrottleStatus>,
     /// 0x19: non-zero if the drive has recorded an internal firmware assert.
     pub assert_dump: Option<u32>,
     /// 0x1a
@@ -95,9 +96,9 @@ pub struct DevMgmtLog {
     /// 0x1b
     pub ifs_eol_sts: Option<u32>,
     /// 0x1c
-    pub cust_eol_state: Option<u32>,
+    pub cust_eol_state: Option<EolState>,
     /// 0x1d
-    pub ifs_eol_state: Option<u32>,
+    pub ifs_eol_state: Option<EolState>,
     /// 0x1e
     pub fcr: Option<u32>,
     /// 0x1f
@@ -113,6 +114,32 @@ pub struct DevMgmtLog {
     /// Entries with identifiers illumos doesn't define, in log order,
     /// skipping unset customer identifiers.
     pub unknown: Vec<UnknownEntry>,
+}
+
+/// The thermal throttling status (`therm_throt_sts`), with values from
+/// nvme-cli's WDC plugin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "snake_case")
+)]
+pub enum ThermalThrottleStatus {
+    Off,
+    On,
+    Unavailable,
+    Unknown(u32),
+}
+
+impl From<u32> for ThermalThrottleStatus {
+    fn from(value: u32) -> Self {
+        match value {
+            0 => Self::Off,
+            1 => Self::On,
+            2 => Self::Unavailable,
+            status => Self::Unknown(status),
+        }
+    }
 }
 
 /// An entry with an unknown identifier.
@@ -275,12 +302,18 @@ impl DevMgmtLog {
             0x15 => put(&mut self.cust_id, u32_at(data, 0)),
             0x16 => put(&mut self.prod_desc, cbs_str(data)),
             0x17 => put(&mut self.tmm_ver, cbs_str(data)),
-            0x18 => put(&mut self.therm_throt_sts, u32_at(data, 0)),
+            0x18 => {
+                put(&mut self.therm_throt_sts, u32_at(data, 0).map(Into::into))
+            }
             0x19 => put(&mut self.assert_dump, u32_at(data, 0)),
             0x1a => put(&mut self.cust_eol_sts, u32_at(data, 0)),
             0x1b => put(&mut self.ifs_eol_sts, u32_at(data, 0)),
-            0x1c => put(&mut self.cust_eol_state, u32_at(data, 0)),
-            0x1d => put(&mut self.ifs_eol_state, u32_at(data, 0)),
+            0x1c => {
+                put(&mut self.cust_eol_state, u32_at(data, 0).map(Into::into))
+            }
+            0x1d => {
+                put(&mut self.ifs_eol_state, u32_at(data, 0).map(Into::into))
+            }
             0x1e => put(&mut self.fcr, u32_at(data, 0)),
             0x1f => put(&mut self.vca_bpc_rev, u32_at(data, 0)),
             0x20 => put(&mut self.vca_bpc_min_rev, u32_at(data, 0)),
@@ -400,6 +433,9 @@ mod tests {
         assert_eq!(log.name.as_deref(), Some("Ultrastar DC SN840"));
         assert_eq!(log.def_user_cap, Some(3_840_755_982_336));
         assert_eq!(log.cust_eol_sts, Some(8));
+        assert_eq!(log.therm_throt_sts, Some(ThermalThrottleStatus::Off));
+        assert_eq!(log.cust_eol_state, Some(EolState::Normal));
+        assert_eq!(log.ifs_eol_state, Some(EolState::Normal));
         assert_eq!(log.vca_tpc_fss_seq, Some(45));
         // The only unknown entries, 0x24 through 0x27, are unset customer
         // identifiers.

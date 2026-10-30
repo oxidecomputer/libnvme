@@ -56,7 +56,8 @@ pub struct EolLog {
     pub system_area_eol_state: EolState,
 }
 
-/// An EOL state field of the EOL log page.
+/// An EOL state, as reported for the customer and system areas by the EOL
+/// log page and the Device Manageability log page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(
     feature = "serde",
@@ -66,15 +67,22 @@ pub struct EolLog {
 pub enum EolState {
     /// 00h: normal mode.
     Normal,
-    /// 01h: end of life (EOL status is over 100%).
+    /// 01h: end of life (the area's EOL status is over 100%).
     EndOfLife,
-    /// 02h: read only mode.
+    /// 02h: read only mode. The read only critical warning in the SMART /
+    /// Health log page is also set.
     ReadOnly,
-    Unknown(u8),
+    Unknown(u32),
 }
 
 impl From<u8> for EolState {
     fn from(value: u8) -> Self {
+        u32::from(value).into()
+    }
+}
+
+impl From<u32> for EolState {
+    fn from(value: u32) -> Self {
         match value {
             0 => Self::Normal,
             1 => Self::EndOfLife,
@@ -175,10 +183,11 @@ mod tests {
 
     #[test]
     fn eol_state_values() {
-        assert_eq!(EolState::from(0), EolState::Normal);
-        assert_eq!(EolState::from(1), EolState::EndOfLife);
-        assert_eq!(EolState::from(2), EolState::ReadOnly);
-        assert_eq!(EolState::from(3), EolState::Unknown(3));
+        assert_eq!(EolState::from(0u8), EolState::Normal);
+        assert_eq!(EolState::from(1u8), EolState::EndOfLife);
+        assert_eq!(EolState::from(2u8), EolState::ReadOnly);
+        assert_eq!(EolState::from(3u8), EolState::Unknown(3));
+        assert_eq!(EolState::from(0x100u32), EolState::Unknown(0x100));
     }
 
     #[test]
