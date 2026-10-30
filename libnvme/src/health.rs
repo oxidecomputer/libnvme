@@ -31,10 +31,10 @@ pub struct CriticalWarnings {
     /// has no volatile write cache.
     pub volatile_memory_backup_failed: Option<bool>,
     /// Persistent Memory Region has become read-only or unreliable (1.4).
-    pub persistent_memory_region_read_only: bool,
+    pub persistent_memory_region_read_only: Option<bool>,
     /// A change to a personality's settings did not complete and could not be
     /// reverted, leaving them in an indeterminate state (2.3).
-    pub indeterminate_personality_state: bool,
+    pub indeterminate_personality_state: Option<bool>,
 }
 
 /// The SMART / Health log page for an NVMe controller.
@@ -165,8 +165,12 @@ impl HealthLogPage {
                 volatile_memory_backup_failed: ctx
                     .vwc_present
                     .then_some(cw.cw_volatile() != 0),
-                persistent_memory_region_read_only: cw.cw_pmrro() != 0,
-                indeterminate_personality_state: cw.cw_ips() != 0,
+                persistent_memory_region_read_only: ctx
+                    .at_least(1, 4)
+                    .then_some(cw.cw_pmrro() != 0),
+                indeterminate_personality_state: ctx
+                    .at_least(2, 3)
+                    .then_some(cw.cw_ips() != 0),
             },
             temperature_c: kelvin_to_c(logpage.hl_temp),
             available_spare_percent: logpage.hl_avail_spare,
@@ -319,19 +323,30 @@ mod tests {
     fn critical_warnings() {
         let mut log = micron_sample();
         log.hl_crit_warn = nvme_health_log_t_crit_warn::from_bits(0x7f);
-        let ctx = HealthContext { vwc_present: true, ..CTX };
+        let ctx = HealthContext { version: (2, 3), vwc_present: true, ..CTX };
         let cw = HealthLogPage::init(log, &ctx).critical_warnings;
         assert!(cw.available_spare_low && cw.temperature && cw.read_only);
         assert!(cw.reliability_degraded);
         assert_eq!(cw.volatile_memory_backup_failed, Some(true));
-        assert!(cw.persistent_memory_region_read_only);
-        assert!(cw.indeterminate_personality_state);
+        assert_eq!(cw.persistent_memory_region_read_only, Some(true));
+        assert_eq!(cw.indeterminate_personality_state, Some(true));
     }
 
     #[test]
     fn version_gating() {
+        let h = HealthLogPage::init(micron_sample(), &CTX);
+        assert_eq!(
+            h.critical_warnings.persistent_memory_region_read_only,
+            Some(false)
+        );
+        assert_eq!(h.critical_warnings.indeterminate_personality_state, None);
+
         let ctx = HealthContext { version: (1, 1), ..CTX };
         let h = HealthLogPage::init(micron_sample(), &ctx);
+        assert_eq!(
+            h.critical_warnings.persistent_memory_region_read_only,
+            None
+        );
         assert!(h.temperature_sensors.is_empty());
         assert_eq!(h.warning_temperature_minutes, None);
         assert!(h.thermal_management.is_none());
