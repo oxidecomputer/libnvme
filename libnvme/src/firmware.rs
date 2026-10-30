@@ -114,6 +114,21 @@ impl FirmwareLogPage {
         }
     }
 
+    /// The firmware version the controller will run after the next
+    /// Controller Level Reset, if that differs from the active slot.
+    ///
+    /// Returns `None` when the next slot is the active slot, when the
+    /// controller doesn't say which slot comes next, or when that slot is
+    /// empty.
+    pub fn next_version(&self) -> Option<&str> {
+        let next = self.next_active_slot?;
+        if next == self.active_slot {
+            return None;
+        }
+        let slot = NvmeSlot::try_from(next).ok()?;
+        self.get_slot_version(slot).ok().flatten()
+    }
+
     /// Returns an iterator over the firmware slots.
     ///
     /// The iterator yields a `Some(String)` if the slot has a firmware version
@@ -321,5 +336,40 @@ impl<'ctrl> FirmwareCommitRequestBuilder<'ctrl> {
             .check_result(unsafe { nvme_fw_commit_req_exec(self.req) }, || {
                 "failed to execute firmware commit request"
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample(
+        active_slot: u8,
+        next_active_slot: Option<u8>,
+    ) -> FirmwareLogPage {
+        FirmwareLogPage {
+            active_slot,
+            next_active_slot,
+            slot1_is_read_only: false,
+            number_of_slots: 3,
+            firmware_slot_versions: vec![
+                Some("R1410004".to_string()),
+                Some("R1410005".to_string()),
+                None,
+            ],
+        }
+    }
+
+    #[test]
+    fn next_version() {
+        // The controller doesn't say which slot is next.
+        assert_eq!(sample(1, None).next_version(), None);
+        // The next slot is the active slot.
+        assert_eq!(sample(1, Some(1)).next_version(), None);
+        // A different slot is next.
+        assert_eq!(sample(1, Some(2)).next_version(), Some("R1410005"));
+        // The next slot is empty or doesn't exist.
+        assert_eq!(sample(1, Some(3)).next_version(), None);
+        assert_eq!(sample(1, Some(5)).next_version(), None);
     }
 }
