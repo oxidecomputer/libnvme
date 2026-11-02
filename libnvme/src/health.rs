@@ -12,6 +12,7 @@ use crate::{
     controller::{Controller, NvmeControllerError},
     controller_info::ControllerInfo,
     logpage::{LogPageBytesError, LogPageName},
+    temperature::Temperature,
 };
 
 /// The Critical Warning field of the SMART / Health log page. Each is `true`
@@ -54,7 +55,7 @@ pub struct EnduranceGroupWarnings {
 
 /// The SMART / Health log page for an NVMe controller.
 ///
-/// Temperatures are converted to Celsius and data units to bytes. A field
+/// Data units are converted to bytes. A field
 /// that isn't meaningful for this controller, by its NVMe version or Identify
 /// data, is `None`, following `nvme_print_health_log()` in illumos
 /// `cmd/nvmeadm/nvmeadm_print.c`.
@@ -64,8 +65,9 @@ pub struct HealthLogPage {
     pub critical_warnings: CriticalWarnings,
     /// Endurance Group critical warnings (1.4).
     pub endurance_group_warnings: Option<EnduranceGroupWarnings>,
-    /// Composite temperature. `None` if the controller reports 0 K.
-    pub temperature_c: Option<i32>,
+    /// Composite temperature. `None` if the controller reports 0 K, which
+    /// isn't a valid reading.
+    pub temperature: Option<Temperature>,
     /// Normalized percentage of remaining spare capacity.
     pub available_spare_percent: u8,
     /// Normalized percentage threshold for `available_spare_percent`.
@@ -100,7 +102,7 @@ pub struct HealthLogPage {
 pub struct TemperatureSensor {
     /// Sensor number, 1 through 8.
     pub sensor: u8,
-    pub temperature_c: i32,
+    pub temperature: Temperature,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,10 +125,10 @@ struct HealthContext {
     version: (u16, u16),
     /// Volatile write cache present.
     vwc_present: bool,
-    /// Warning Composite Temperature Threshold in Kelvin, 0 if unreported.
-    wctemp: u16,
-    /// Critical Composite Temperature Threshold in Kelvin, 0 if unreported.
-    cctemp: u16,
+    /// Warning Composite Temperature Threshold.
+    wctemp: Option<Temperature>,
+    /// Critical Composite Temperature Threshold.
+    cctemp: Option<Temperature>,
 }
 
 impl HealthContext {
@@ -146,12 +148,6 @@ impl HealthContext {
 
 fn u128_from(v: nvme_uint128_t) -> u128 {
     (u128::from(v.hi) << 64) | u128::from(v.lo)
-}
-
-/// Convert a temperature in Kelvin to Celsius. 0 K means the temperature
-/// isn't reported.
-fn kelvin_to_c(k: u16) -> Option<i32> {
-    (k != 0).then(|| i32::from(k) - 273)
 }
 
 /// Data units are 1000 512-byte blocks.
@@ -197,7 +193,7 @@ impl HealthLogPage {
                     read_only: eg.ecgws_egro() != 0,
                 }
             }),
-            temperature_c: kelvin_to_c(logpage.hl_temp),
+            temperature: Temperature::from_kelvin(logpage.hl_temp),
             available_spare_percent: logpage.hl_avail_spare,
             available_spare_threshold_percent: logpage.hl_avail_spare_thr,
             life_used_percent: logpage.hl_used,
@@ -211,9 +207,9 @@ impl HealthLogPage {
             unsafe_shutdowns: u128_from(logpage.hl_unsafe_shutdn),
             media_errors: u128_from(logpage.hl_media_errors),
             error_log_entries: u128_from(logpage.hl_errors_logged),
-            warning_temperature_minutes: (v1_2 && ctx.wctemp != 0)
+            warning_temperature_minutes: (v1_2 && ctx.wctemp.is_some())
                 .then_some(logpage.hl_warn_temp_time),
-            critical_temperature_minutes: (v1_2 && ctx.cctemp != 0)
+            critical_temperature_minutes: (v1_2 && ctx.cctemp.is_some())
                 .then_some(logpage.hl_crit_temp_time),
             temperature_sensors: if v1_2 {
                 (1u8..)
@@ -221,7 +217,7 @@ impl HealthLogPage {
                     .filter_map(|(sensor, k)| {
                         Some(TemperatureSensor {
                             sensor,
-                            temperature_c: kelvin_to_c(k)?,
+                            temperature: Temperature::from_kelvin(k)?,
                         })
                     })
                     .collect()
@@ -290,8 +286,8 @@ mod tests {
     const CTX: HealthContext = HealthContext {
         version: (1, 4),
         vwc_present: false,
-        wctemp: 343,
-        cctemp: 353,
+        wctemp: Temperature::from_kelvin(343),
+        cctemp: Temperature::from_kelvin(353),
     };
 
     fn u128(v: u64) -> nvme_uint128_t {
@@ -321,14 +317,14 @@ mod tests {
     #[test]
     fn converts_units() {
         let h = HealthLogPage::init(micron_sample(), &CTX);
-        assert_eq!(h.temperature_c, Some(47));
+        assert_eq!(h.temperature.map(|t| t.celsius()), Some(47));
         assert_eq!(h.data_read_bytes, 27_300 * 512_000);
         assert_eq!(h.data_written_bytes, 33_600 * 512_000);
         assert_eq!(h.power_on_hours, 234);
         let sensors: Vec<(u8, i32)> = h
             .temperature_sensors
             .iter()
-            .map(|s| (s.sensor, s.temperature_c))
+            .map(|s| (s.sensor, s.temperature.celsius()))
             .collect();
         assert_eq!(sensors, [(1, 61), (2, 53), (3, 43)]);
         assert_eq!(h.warning_temperature_minutes, Some(0));
@@ -341,7 +337,7 @@ mod tests {
     fn zero_kelvin_is_unreported() {
         let mut log = micron_sample();
         log.hl_temp = 0;
-        assert_eq!(HealthLogPage::init(log, &CTX).temperature_c, None);
+        assert_eq!(HealthLogPage::init(log, &CTX).temperature, None);
     }
 
     #[test]
@@ -403,7 +399,7 @@ mod tests {
         assert_eq!(h.warning_temperature_minutes, None);
         assert!(h.thermal_management.is_none());
 
-        let ctx = HealthContext { version: (1, 2), wctemp: 0, ..CTX };
+        let ctx = HealthContext { version: (1, 2), wctemp: None, ..CTX };
         let h = HealthLogPage::init(micron_sample(), &ctx);
         assert_eq!(h.temperature_sensors.len(), 3);
         assert_eq!(h.warning_temperature_minutes, None);

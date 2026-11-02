@@ -18,6 +18,7 @@ mod lba;
 pub mod log_discovery;
 mod logpage;
 pub mod namespace;
+pub mod temperature;
 mod util;
 mod wdc;
 pub mod wdc_devmgmt;

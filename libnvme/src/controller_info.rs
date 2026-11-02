@@ -10,6 +10,7 @@ use thiserror::Error;
 use crate::{
     error::{InternalError, LibraryError},
     lba::LbaFormat,
+    temperature::Temperature,
     util::FfiPtr,
 };
 
@@ -130,18 +131,18 @@ impl ControllerInfo {
         unsafe { (*identify.inner).id_vwc.vwc_present() != 0 }
     }
 
-    /// Warning Composite Temperature Threshold in Kelvin, or 0 if the
-    /// controller does not report one (1.2).
-    pub fn warning_composite_temp(&self) -> u16 {
+    /// Warning Composite Temperature Threshold, or `None` if the controller
+    /// does not report one (1.2).
+    pub fn warning_composite_temp(&self) -> Option<Temperature> {
         let identify = self.get_controller_info_identify();
-        unsafe { (*identify.inner).ap_wctemp }
+        Temperature::from_kelvin(unsafe { (*identify.inner).ap_wctemp })
     }
 
-    /// Critical Composite Temperature Threshold in Kelvin, or 0 if the
-    /// controller does not report one (1.2).
-    pub fn critical_composite_temp(&self) -> u16 {
+    /// Critical Composite Temperature Threshold, or `None` if the controller
+    /// does not report one (1.2).
+    pub fn critical_composite_temp(&self) -> Option<Temperature> {
         let identify = self.get_controller_info_identify();
-        unsafe { (*identify.inner).ap_cctemp }
+        Temperature::from_kelvin(unsafe { (*identify.inner).ap_cctemp })
     }
 
     pub fn num_namespaces(&self) -> u32 {
