@@ -195,7 +195,7 @@ fn cbs_text(data: &[u8]) -> Option<String> {
 
 #[derive(Debug, Error)]
 pub enum DevMgmtError {
-    #[error("libnvme error: {0}")]
+    #[error(transparent)]
     ControllerError(#[from] NvmeControllerError),
     #[error("malformed device manageability log at offset {offset}: {reason}")]
     Malformed { offset: usize, reason: &'static str },
