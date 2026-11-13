@@ -238,7 +238,7 @@ impl HealthLogPage {
 
 #[derive(Debug, Error)]
 pub enum HealthLogPageError {
-    #[error("libnvme error: {0}")]
+    #[error(transparent)]
     ControllerError(#[from] NvmeControllerError),
     #[error(
         "libnvme says the log page is {} bytes but it should be {} bytes",
