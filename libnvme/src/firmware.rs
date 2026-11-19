@@ -5,6 +5,7 @@
 use core::slice;
 use std::mem::{self, MaybeUninit};
 
+use bitfield_struct::bitfield;
 use libnvme_sys::nvme::*;
 use thiserror::Error;
 
@@ -12,9 +13,25 @@ use crate::{
     controller::{Controller, NvmeControllerError, WriteLockedController},
     controller_info::ControllerInfoIdentify,
     error::LibraryError,
+    identify::IdFrmw,
     logpage::{LogPageInfo, LogPageName},
     NvmeError,
 };
+
+/// The first byte of the Firmware Slot Information log page.
+#[bitfield(u8)]
+struct ActiveFirmwareInfo {
+    /// Active Firmware Slot
+    #[bits(3, access = RO)]
+    fw_afi: u8,
+    #[bits(1)]
+    __: u8, // fw_rsvd1
+    /// Next Active Firmware Slot
+    #[bits(3, access = RO)]
+    fw_next: u8,
+    #[bits(1)]
+    __: u8, // fw_rsvd2
+}
 
 #[derive(Debug, Error)]
 pub enum NvmeSlotError {
@@ -60,19 +77,20 @@ impl FirmwareLogPage {
         identify: &ControllerInfoIdentify<'_>,
         logpage: nvme_fwslot_log_t,
     ) -> Self {
-        let active_slot = logpage.bitfield1.fw_afi();
-        let slot1_is_read_only =
-            unsafe { (*identify.inner).id_frmw.fw_readonly() };
+        let afi = ActiveFirmwareInfo::from_bits(logpage.bitfield1);
+        let frmw = IdFrmw::from_bits(unsafe { (*identify.inner).id_frmw });
+        let active_slot = afi.fw_afi();
+        let slot1_is_read_only = frmw.fw_readonly();
 
         // NVMe Spec: "If this field is 0h, then the controller does not
         // indicate the firmware slot that is going to be activated at the next
         // Controller Level Reset."
-        let next_active_slot = match logpage.bitfield1.fw_next() {
+        let next_active_slot = match afi.fw_next() {
             0 => None,
             slot => Some(slot),
         };
 
-        let number_of_slots = unsafe { (*identify.inner).id_frmw.fw_nslot() };
+        let number_of_slots = frmw.fw_nslot();
         let nslots = usize::from(number_of_slots);
         let mut firmware_slots = Vec::with_capacity(nslots);
         for slot in &logpage.fw_frs[..nslots] {
@@ -335,5 +353,29 @@ impl<'ctrl> FirmwareCommitRequestBuilder<'ctrl> {
             .check_result(unsafe { nvme_fw_commit_req_exec(self.req) }, || {
                 "failed to execute firmware commit request"
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn active_firmware_info_bits() {
+        // Reserved bits 3 and 7 are set and must be ignored.
+        let afi = ActiveFirmwareInfo::from_bits(0b1101_1010);
+        assert_eq!(afi.fw_afi(), 2);
+        assert_eq!(afi.fw_next(), 5);
+    }
+
+    #[test]
+    fn id_frmw_bits() {
+        let frmw = IdFrmw::from_bits(0b0000_0111);
+        assert!(frmw.fw_readonly());
+        assert_eq!(frmw.fw_nslot(), 3);
+
+        let frmw = IdFrmw::from_bits(0b0000_1110);
+        assert!(!frmw.fw_readonly());
+        assert_eq!(frmw.fw_nslot(), 7);
     }
 }

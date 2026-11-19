@@ -13,6 +13,7 @@ pub mod controller;
 pub mod controller_info;
 mod error;
 pub mod firmware;
+mod identify;
 mod lba;
 mod logpage;
 pub mod namespace;

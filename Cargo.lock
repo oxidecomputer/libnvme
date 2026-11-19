@@ -17,6 +17,7 @@ dependencies = [
 name = "libnvme"
 version = "0.1.3"
 dependencies = [
+ "bitfield-struct",
  "libnvme-sys",
  "nvme",
  "thiserror",
@@ -25,9 +26,6 @@ dependencies = [
 [[package]]
 name = "libnvme-sys"
 version = "0.0.0"
-dependencies = [
- "bitfield-struct",
-]
 
 [[package]]
 name = "nvme"
