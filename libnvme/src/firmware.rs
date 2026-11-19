@@ -18,7 +18,7 @@ use crate::{
     NvmeError,
 };
 
-/// The first byte of the Firmware Slot Information log page.
+/// `fw_afi_next_bits` of the Firmware Slot Information log page.
 #[bitfield(u8)]
 struct ActiveFirmwareInfo {
     /// Active Firmware Slot
@@ -77,7 +77,7 @@ impl FirmwareLogPage {
         identify: &ControllerInfoIdentify<'_>,
         logpage: nvme_fwslot_log_t,
     ) -> Self {
-        let afi = ActiveFirmwareInfo::from_bits(logpage.bitfield1);
+        let afi = ActiveFirmwareInfo::from_bits(logpage.fw_afi_next_bits);
         let frmw = IdFrmw::from_bits(unsafe { (*identify.inner).id_frmw });
         let active_slot = afi.fw_afi();
         let slot1_is_read_only = frmw.fw_readonly();

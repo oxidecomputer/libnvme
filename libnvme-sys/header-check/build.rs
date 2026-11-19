@@ -56,6 +56,20 @@ const ID_BITFIELDS: &[&str] = &[
     "id_sgls",
 ];
 
+/// Fields of `nvme_idctl_psd_t` that are one or more bitfields in C.
+const PSD_BITFIELDS: &[&str] = &[
+    "psd_mps_nops_bits",
+    "psd_rrt_bits",
+    "psd_rrl_bits",
+    "psd_rwt_bits",
+    "psd_rwl_bits",
+    "psd_ips_bits",
+    "psd_apw_aps_bits",
+    "psd_epfrts_fqvts_bits",
+    "psd_epfvts_bits",
+    "psd_mbws_bits",
+];
+
 /// Reserved fields of `nvme_identify_ctrl` that the C header has since split
 /// up to make room for new fields.
 const ID_STALE_RESERVED: &[&str] = &[
@@ -106,8 +120,8 @@ fn main() {
 
     // Fields with no C counterpart to compare against.
     cfg.skip_struct_field(|s, f| match s.ident() {
-        "nvme_fwslot_log_t" => f.ident() == "bitfield1",
-        "nvme_idctl_psd_t" => true,
+        "nvme_fwslot_log_t" => f.ident() == "fw_afi_next_bits",
+        "nvme_idctl_psd_t" => PSD_BITFIELDS.contains(&f.ident()),
         "nvme_identify_ctrl" => ID_STALE_RESERVED.contains(&f.ident()),
         _ => false,
     });

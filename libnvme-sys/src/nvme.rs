@@ -154,11 +154,10 @@ const NVME_FWVER_SZ: usize = 8;
 #[repr(C)]
 #[derive(Debug)]
 pub struct nvme_fwslot_log_t {
-    // fw_afi and fw_next
-    pub bitfield1: u8,
-    _reserved1: [u8; 7],
+    pub fw_afi_next_bits: u8,
+    pub fw_rsvd3: [u8; 7],
     pub fw_frs: [[c_char; NVME_FWVER_SZ]; 7],
-    _reserved2: [u8; 512 - 64],
+    pub fw_rsvd4: [u8; 512 - 64],
 }
 
 opaque_type!(nvme, nvme_t);

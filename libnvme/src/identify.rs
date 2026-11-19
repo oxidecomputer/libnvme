@@ -23,89 +23,88 @@ pub(crate) struct IdQes {
     pub qes_max: u8,
 }
 
-/// NVMe Power State Descriptor/
-#[bitfield(u64)]
-pub(crate) struct IdPsdChunk1 {
-    /// Maximum Power
-    #[bits(16, access = RO)]
-    pub psd_mp: u16,
-    /// psd_rsvd1
-    #[bits(8)]
-    __: B8,
+/// `psd_mps_nops_bits` of the NVMe Power State Descriptor
+#[bitfield(u8)]
+pub(crate) struct IdPsdMpsNops {
     /// Max Power Scale (1.1)
     #[bits(1, access = RO)]
     pub psd_mps: u8,
     /// Non-Operational State (1.1)
     #[bits(1, access = RO)]
     pub psd_nops: u8,
-    /// psd_rsvd2
+    /// psd_rsvd26
     #[bits(6)]
-    __: B6,
-    /// Entry Latency
-    #[bits(32, access = RO)]
-    pub psd_enlat: u32,
+    __: u8,
 }
 
-#[bitfield(u64)]
-pub(crate) struct IdPsdChunk2 {
-    #[bits(32, access = RO)]
-    /* Exit Latency */
-    pub psd_exlat: u32,
+/// `psd_rrt_bits`, `psd_rrl_bits`, `psd_rwt_bits` and `psd_rwl_bits` of the
+/// NVMe Power State Descriptor, which share a layout.
+#[bitfield(u8)]
+pub(crate) struct IdPsdRelative {
+    /// Relative Read Throughput, Read Latency, Write Throughput or Write
+    /// Latency
     #[bits(5, access = RO)]
-    /* Relative Read Throughput */
-    pub psd_rrt: u8,
-    /// psd_rsvd3
+    pub value: u8,
     #[bits(3)]
-    __: B3,
-    #[bits(5, access = RO)]
-    /* Relative Read Latency */
-    pub psd_rrl: u8,
-    /// psd_rsvd4
-    #[bits(3)]
-    __: B3,
-    #[bits(5, access = RO)]
-    /// Relative Write Throughput
-    pub psd_rwt: u8,
-    /// psd_rsvd5
-    #[bits(3)]
-    __: B3,
-    #[bits(5, access = RO)]
-    /// Relative Write Latency
-    pub psd_rwl: u8,
-    /// psd_rsvd6
-    #[bits(3)]
-    __: B3,
+    __: u8,
 }
 
-#[bitfield(u64)]
-pub(crate) struct IdPsdChunk3 {
-    /// Idle Power (1.2)
-    #[bits(16, access = RO)]
-    pub psd_idlp: u16,
-    /// psd_rsvd7
+/// `psd_ips_bits` of the NVMe Power State Descriptor
+#[bitfield(u8)]
+pub(crate) struct IdPsdIps {
+    /// psd_rsvd144
     #[bits(6)]
     __: u8,
     /// Idle Power Scale (1.2)
     #[bits(2, access = RO)]
     pub psd_ips: u8,
-    /// psd_rsvd8
-    #[bits(8)]
-    __: B8,
-    /// Active Power (1.2)
-    #[bits(16)]
-    pub psd_actp: u16,
+}
+
+/// `psd_apw_aps_bits` of the NVMe Power State Descriptor
+#[bitfield(u8)]
+pub(crate) struct IdPsdApwAps {
     /// Active Power Workload (1.2)
     #[bits(3, access = RO)]
     pub psd_apw: u8,
-    /// psd_rsvd9
+    /// psd_rsvd179
     #[bits(3)]
-    __: B3,
+    __: u8,
     /// Active Power Scale
     #[bits(2, access = RO)]
     pub psd_aps: u8,
-    /// psd_rsvd10 -- the last 64 bits are in the top level struct
-    #[bits(8)]
-    __: B8,
+}
+
+/// `psd_epfrts_fqvts_bits` of the NVMe Power State Descriptor
+#[bitfield(u8)]
+pub(crate) struct IdPsdEpfrtsFqvts {
+    /// Emergency Power Fail Recovery Time Scale (2.1)
+    #[bits(4, access = RO)]
+    pub psd_epfrts: u8,
+    /// Forced Quiescence Vault Time Scale (2.1)
+    #[bits(4, access = RO)]
+    pub psd_fqvts: u8,
+}
+
+/// `psd_epfvts_bits` of the NVMe Power State Descriptor
+#[bitfield(u8)]
+pub(crate) struct IdPsdEpfvts {
+    /// Emergency Power Fail Vault Time Scale (2.1)
+    #[bits(4, access = RO)]
+    pub psd_epfvts: u8,
+    /// psd_rsvd216
+    #[bits(4)]
+    __: u8,
+}
+
+/// `psd_mbws_bits` of the NVMe Power State Descriptor
+#[bitfield(u8)]
+pub(crate) struct IdPsdMbws {
+    /// Max Bandwidth Scale (2.3)
+    #[bits(3, access = RO)]
+    pub psd_mbws: u8,
+    /// psd_rsvd
+    #[bits(5)]
+    __: u8,
 }
 
 #[bitfield(u8)]
@@ -565,4 +564,29 @@ pub(crate) struct IdSgls {
     /// sgl_rsvd2
     #[bits(10)]
     __: B10,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn psd_bits() {
+        // Reserved bits are set throughout and must be ignored.
+        let b = IdPsdMpsNops::from_bits(0b1111_1101);
+        assert_eq!((b.psd_mps(), b.psd_nops()), (1, 0));
+
+        assert_eq!(IdPsdRelative::from_bits(0b1111_0011).value(), 0b1_0011);
+
+        assert_eq!(IdPsdIps::from_bits(0b1011_1111).psd_ips(), 0b10);
+
+        let b = IdPsdApwAps::from_bits(0b0111_1101);
+        assert_eq!((b.psd_apw(), b.psd_aps()), (0b101, 0b01));
+
+        let b = IdPsdEpfrtsFqvts::from_bits(0xa3);
+        assert_eq!((b.psd_epfrts(), b.psd_fqvts()), (0x3, 0xa));
+
+        assert_eq!(IdPsdEpfvts::from_bits(0xf6).psd_epfvts(), 0x6);
+        assert_eq!(IdPsdMbws::from_bits(0b1111_1010).psd_mbws(), 0b010);
+    }
 }

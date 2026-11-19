@@ -11,14 +11,35 @@ pub struct nvme_uint128_t {
     pub hi: u64,
 }
 
-/// NVMe Power State Descriptor, as 64-bit chunks rather than its fields.
+/// NVMe Power State Descriptor
+///
+/// A `u8` that holds bitfields in C is named after them, with a `_bits`
+/// suffix.
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 pub struct nvme_idctl_psd_t {
-    pub chunk1: u64,
-    pub chunk2: u64,
-    pub chunk3: u64,
-    _padding: u64,
+    pub psd_mp: u16, /* Maximum Power */
+    pub psd_rsvd16: u8,
+    pub psd_mps_nops_bits: u8, /* Max Power Scale, Non-Operational State (1.1) */
+    pub psd_enlat: u32,        /* Entry Latency */
+    pub psd_exlat: u32,        /* Exit Latency */
+    pub psd_rrt_bits: u8,      /* Relative Read Throughput */
+    pub psd_rrl_bits: u8,      /* Relative Read Latency */
+    pub psd_rwt_bits: u8,      /* Relative Write Throughput */
+    pub psd_rwl_bits: u8,      /* Relative Write Latency */
+    pub psd_idlp: u16,         /* Idle Power (1.2) */
+    pub psd_ips_bits: u8,      /* Idle Power Scale (1.2) */
+    pub psd_rsvd152: u8,
+    pub psd_actp: u16,             /* Active Power (1.2) */
+    pub psd_apw_aps_bits: u8, /* Active Power Workload (1.2), Active Power Scale */
+    pub psd_epfrt: u8,        /* Emergency Power Fail Recovery Time (2.1) */
+    pub psd_fqvt: u8,         /* Forced Quiescence Vault Time (2.1) */
+    pub psd_epfvt: u8,        /* Emergency Power Fail Vault Time (2.1) */
+    pub psd_epfrts_fqvts_bits: u8, /* EPFRT Scale, FQVT Scale (2.1) */
+    pub psd_epfvts_bits: u8,  /* EPFVT Scale (2.1) */
+    pub psd_mbw: u8,          /* Max Bandwidth (2.3) */
+    pub psd_mbws_bits: u8,    /* Max Bandwidth Scale (2.3) */
+    pub psd_rsvd240: [u8; 2],
 }
 
 const NVME_SERIAL_SZ: usize = 20;
@@ -131,6 +152,25 @@ pub struct nvme_identify_ctrl {
 
 #[cfg(test)]
 mod tests {
+    use std::mem::offset_of;
+
+    use super::nvme_idctl_psd_t;
+
+    // header-check can't see these, as C can't take the offset of a bitfield.
+    #[test]
+    fn nvme_idctl_psd_t_bitfield_offsets() {
+        assert_eq!(offset_of!(nvme_idctl_psd_t, psd_mps_nops_bits), 3);
+        assert_eq!(offset_of!(nvme_idctl_psd_t, psd_rrt_bits), 12);
+        assert_eq!(offset_of!(nvme_idctl_psd_t, psd_rrl_bits), 13);
+        assert_eq!(offset_of!(nvme_idctl_psd_t, psd_rwt_bits), 14);
+        assert_eq!(offset_of!(nvme_idctl_psd_t, psd_rwl_bits), 15);
+        assert_eq!(offset_of!(nvme_idctl_psd_t, psd_ips_bits), 18);
+        assert_eq!(offset_of!(nvme_idctl_psd_t, psd_apw_aps_bits), 22);
+        assert_eq!(offset_of!(nvme_idctl_psd_t, psd_epfrts_fqvts_bits), 26);
+        assert_eq!(offset_of!(nvme_idctl_psd_t, psd_epfvts_bits), 27);
+        assert_eq!(offset_of!(nvme_idctl_psd_t, psd_mbws_bits), 29);
+    }
+
     #[test]
     fn nvme_identify_ctrl_t_size() {
         // $ mdb /usr/lib/amd64/libnvme.so
