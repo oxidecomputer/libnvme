@@ -14,7 +14,8 @@ set -o xtrace
 cargo --version
 rustc --version
 
-# A failure here that header-check does not share means illumos has changed,
-# and the bindings and tools/illumos_gate_version need to catch up.
+# Check against the tip of stlouis. If this fails while the header-check job
+# passes, illumos has changed: update the bindings, then
+# tools/illumos_gate_version.
 banner latest
 ptime -m ./tools/header-check.sh stlouis
