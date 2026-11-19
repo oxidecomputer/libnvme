@@ -68,13 +68,20 @@ pub struct nvme_identify_ctrl {
     pub id_oaes: u32,   /* Optional Async Events Supported (1.2) */
     pub id_ctratt: u32, /* Controller Attributes (1.2) */
     pub id_rrls: u16,   /* Read Recovery Levels (1.4) */
-    pub id_rsvd_cc: [u8; 9],
-    pub id_cntrltype: u8,    /* Controller Type (1.4) */
+    pub id_bpcap: u8,   /* Boot Partition Capabilities (2.1) */
+    pub id_rsvd_103: u8,
+    pub id_nssl: u32, /* NVM Subsystem Shutdown Lat. (2.1) */
+    pub id_rsvd_108: [u8; 2],
+    pub id_plsi: u8, /* Power Loss Signaling Information (2.1) */
+    pub id_cntrltype: u8, /* Controller Type (1.4) */
     pub id_frguid: [u8; 16], /* FRU GUID (1.3) */
-    pub id_crdt1: u16,       /* Command Retry Delay Time 1 (1.4) */
-    pub id_crdt2: u16,       /* Command Retry Delay Time 2 (1.4) */
-    pub id_crdt3: u16,       /* Command Retry Delay Time 3 (1.4) */
-    pub id_rsvd2_cc: [u8; 106],
+    pub id_crdt1: u16, /* Command Retry Delay Time 1 (1.4) */
+    pub id_crdt2: u16, /* Command Retry Delay Time 2 (1.4) */
+    pub id_crdt3: u16, /* Command Retry Delay Time 3 (1.4) */
+    pub id_crcap: u8, /* Controller Reachability Capabilities (2.1) */
+    pub id_ciu: u8,  /* Controller Inst. Uniquifier (2.3) */
+    pub id_cirn: [u8; 8], /* Controller Inst. Random Num. (2.3) */
+    pub id_rsvd2_cc: [u8; 240 - 144],
     pub id_rsvd_nvmemi: [u8; 13],
     /* NVMe-MI region */
     pub id_nvmsr: u8, /* NVMe Subsystem Report */
@@ -117,7 +124,20 @@ pub struct nvme_identify_ctrl {
     pub ap_anagrpmax: u32, /* ANA Group ID Max (1.4) */
     pub ap_nanagrpid: u32, /* Number of ANA Group IDs (1.4) */
     pub ap_pels: u32,     /* Persistent Event Log Size (1.4) */
-    pub id_rsvd_ac: [u8; 156],
+    pub ap_did: u16,      /* Domain ID (2.0) */
+    pub ap_kpioc: u8,     /* Key Per I/O Capabilities (2.1) */
+    pub ap_rsvd359: u8,
+    pub ap_mptfawr: u16, /* Max FW Act Time w/o Reset (2.1) */
+    pub ap_rsvd362: [u8; 368 - 362],
+    pub ap_megcap: nvme_uint128_t, /* Max Endurance Group Cap (2.1) */
+    pub ap_tmpthha: u8,            /* Temp Threshold Hysteresis Attrs. (2.1) */
+    pub ap_mupa: u8,               /* Max. Unlimited Power Attrs. (2.3) */
+    pub ap_cqt: u16,               /* Command Quiesce Time (2.1) */
+    pub ap_cdpa: [u8; 2],          /* Cfg. Device Personality Attr (2.3) */
+    pub ap_mup: u16,               /* Maximum Unlimited Power (2.3) */
+    pub ap_impsr: [u8; 2],         /* Interval Power Sample Rate (2.3) */
+    pub ap_msmt: u16,              /* Maximum Stop Measure. Time (2.3) */
+    pub ap_rsvd_ac: [u8; 512 - 396],
 
     /* NVM Command Set Attributes */
     pub id_sqes: u8,    /* Submission Queue Entry Size */
@@ -133,10 +153,26 @@ pub struct nvme_identify_ctrl {
     pub id_nvscc: u8,   /* NVM Vendor Specific Command Conf */
     pub id_nwpc: u8,    /* Namespace Write Protection Caps */
     pub id_acwu: u16,   /* Atomic Compare & Write Unit (1.1) */
-    pub id_rsvd_nc_3: u16,
-    pub id_sgls: u32, /* SGL Support (1.1) */
-    pub id_mnan: u32, /* Maximum Number of Allowed NSes */
-    pub id_rsvd_nc_4: [u8; 224usize],
+    pub id_cdfs: u16,   /* Copy Descriptor Formats Supported (2.0) */
+    pub id_sgls: u32,   /* SGL Support (1.1) */
+    pub id_mnan: u32,   /* Maximum Num of Allowed NSes (1.4) */
+    pub id_maxdna: nvme_uint128_t, /* Maximum Domain NS Attach (2.0) */
+    pub id_maxcna: u32, /* Maximum I/O Ctrl NS Attach (2.0) */
+    pub id_oaqd: u32,   /* Optimal Agg. Queue Depth (2.1) */
+    pub id_rhiri: u8,   /* Host-Init Refresh Ival (2.1) */
+    pub id_hirt: u8,    /* Host-Init refresh time (2.1) */
+    pub id_cmmrtd: u16, /* Ctrl. Max Mem Track Desc (2.1) */
+    pub id_nmmrtd: u16, /* NVM Max Mem Track Desc (2.1) */
+    pub id_minmrtg: u8, /* Min Mem Range Track Gran (2.1) */
+    pub id_maxmrtg: u8, /* Max Mem Range Track Gran (2.1) */
+    pub id_trattr: u8,  /* Tracking Attributes (2.1) */
+    pub id_rsvd577: u8,
+    pub id_mcudmq: u16,  /* Max Ctrl User Mig Queues (2.1) */
+    pub id_mnsudmq: u16, /* Max NVM Sys Mig Queues (2.1) */
+    pub id_mcmr: u16,    /* Max CDQ Memory Ranges (2.1) */
+    pub id_nmcmr: u16,   /* NVM Sub Max CDQ Mem Ranges (2.1) */
+    pub id_mcdqpc: u16,  /* Max Ctrl Data Queue PRP (2.1) */
+    pub id_rsvd_nc_4: [u8; 768 - 588],
 
     /* I/O Command Set Attributes */
     pub id_subnqn: [u8; 256], /* Subsystem Qualified Name (1.2.1+) */
