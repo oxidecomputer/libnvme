@@ -27,7 +27,8 @@ const OPAQUE: &[&str] = &[
     "di_node",
 ];
 
-/// Fields of `nvme_identify_ctrl` that are a struct in C.
+/// Fields of `nvme_identify_ctrl` that are a struct in C but an integer or
+/// byte array here, so only their offset and size can be compared.
 const ID_STRUCTS: &[&str] = &[
     "id_mic",
     "id_oaes",
