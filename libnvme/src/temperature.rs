@@ -21,7 +21,10 @@ pub struct Temperature(NonZeroU16);
 impl Temperature {
     /// `None` for 0 K.
     pub const fn from_kelvin(kelvin: u16) -> Option<Self> {
-        NonZeroU16::new(kelvin).map(Self)
+        match NonZeroU16::new(kelvin) {
+            Some(k) => Some(Self(k)),
+            None => None,
+        }
     }
 
     pub fn kelvin(&self) -> u16 {
