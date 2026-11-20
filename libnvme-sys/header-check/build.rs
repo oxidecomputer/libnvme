@@ -27,11 +27,15 @@ const OPAQUE: &[&str] = &[
     "di_node",
 ];
 
-/// Fields of `nvme_identify_ctrl` that are a group of bitfields in C.
-const ID_BITFIELDS: &[&str] = &[
+/// Fields of `nvme_identify_ctrl` that are a struct in C but an integer or
+/// byte array here, so only their offset and size can be compared.
+const ID_STRUCTS: &[&str] = &[
     "id_mic",
     "id_oaes",
     "id_ctratt",
+    "id_bpcap",
+    "id_plsi",
+    "id_crcap",
     "id_nvmsr",
     "id_vpdwc",
     "id_mec",
@@ -45,6 +49,11 @@ const ID_BITFIELDS: &[&str] = &[
     "ap_hctma",
     "ap_sanitize",
     "ap_anacap",
+    "ap_kpioc",
+    "ap_tmpthha",
+    "ap_mupa",
+    "ap_cdpa",
+    "ap_impsr",
     "id_sqes",
     "id_cqes",
     "id_oncs",
@@ -53,7 +62,9 @@ const ID_BITFIELDS: &[&str] = &[
     "id_vwc",
     "id_nvscc",
     "id_nwpc",
+    "id_cdfs",
     "id_sgls",
+    "id_trattr",
 ];
 
 /// Fields of `nvme_idctl_psd_t` that are one or more bitfields in C.
@@ -68,16 +79,6 @@ const PSD_BITFIELDS: &[&str] = &[
     "psd_epfrts_fqvts_bits",
     "psd_epfvts_bits",
     "psd_mbws_bits",
-];
-
-/// Reserved fields of `nvme_identify_ctrl` that the C header has since split
-/// up to make room for new fields.
-const ID_STALE_RESERVED: &[&str] = &[
-    "id_rsvd_cc",
-    "id_rsvd2_cc",
-    "id_rsvd_ac",
-    "id_rsvd_nc_3",
-    "id_rsvd_nc_4",
 ];
 
 fn main() {
@@ -122,13 +123,12 @@ fn main() {
     cfg.skip_struct_field(|s, f| match s.ident() {
         "nvme_fwslot_log_t" => f.ident() == "fw_afi_next_bits",
         "nvme_idctl_psd_t" => PSD_BITFIELDS.contains(&f.ident()),
-        "nvme_identify_ctrl" => ID_STALE_RESERVED.contains(&f.ident()),
         _ => false,
     });
 
-    // These are bitfields in C, so only their offset and size can be compared.
+    // Only the offset and size of these can be compared.
     cfg.skip_struct_field_type(|s, f| {
-        s.ident() == "nvme_identify_ctrl" && ID_BITFIELDS.contains(&f.ident())
+        s.ident() == "nvme_identify_ctrl" && ID_STRUCTS.contains(&f.ident())
     });
 
     ctest::generate_test(&mut cfg, "../src/lib.rs", "main.rs").unwrap();
