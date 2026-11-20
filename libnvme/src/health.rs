@@ -124,7 +124,10 @@ pub struct HealthLogPage {
     pub available_spare_threshold_percent: u8,
     /// Vendor estimate of the percentage of rated life used; may exceed 100.
     pub life_used_percent: u8,
+    /// Bytes read by the host. The controller counts in units of 512,000
+    /// bytes, rounded up; 0 means it doesn't report a count.
     pub data_read_bytes: u128,
+    /// Bytes written by the host, counted as `data_read_bytes` is.
     pub data_written_bytes: u128,
     pub host_read_commands: u128,
     pub host_write_commands: u128,
