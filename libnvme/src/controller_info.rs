@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::{borrow::Cow, ffi::CStr, marker::PhantomData};
+use std::{borrow::Cow, ffi::CStr, fmt, marker::PhantomData};
 
 use libnvme_sys::nvme::*;
 use thiserror::Error;
@@ -74,6 +74,20 @@ pub(crate) struct ControllerInfoIdentify<'a> {
     _phantom: PhantomData<&'a ControllerInfo>,
 }
 
+/// An NVMe specification version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct NvmeVersion {
+    pub major: u16,
+    pub minor: u16,
+}
+
+impl fmt::Display for NvmeVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.major, self.minor)
+    }
+}
+
 pub struct ControllerInfo(*mut nvme_ctrl_info_t);
 
 impl FfiPtr for ControllerInfo {
@@ -120,10 +134,10 @@ impl ControllerInfo {
         }
     }
 
-    /// The NVMe version the controller implements, as `(major, minor)`.
-    pub fn version(&self) -> (u16, u16) {
+    /// The NVMe version the controller implements.
+    pub fn version(&self) -> NvmeVersion {
         let vers = unsafe { &*nvme_ctrl_info_version(self.0) };
-        (vers.v_major, vers.v_minor)
+        NvmeVersion { major: vers.v_major, minor: vers.v_minor }
     }
 
     /// Whether the controller has a volatile write cache.
@@ -198,5 +212,19 @@ impl LibraryError for ControllerInfo {
             code: NvmeInfoErrorCode::from_raw(raw),
             error: internal,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn version_ordering() {
+        let v = |major, minor| NvmeVersion { major, minor };
+        assert!(v(1, 10) > v(1, 4));
+        assert!(v(2, 0) > v(1, 4));
+        assert!(v(1, 4) >= v(1, 4));
+        assert_eq!(v(1, 3).to_string(), "1.3");
     }
 }

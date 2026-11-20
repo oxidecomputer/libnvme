@@ -11,7 +11,7 @@ use zerocopy::FromBytes;
 
 use crate::{
     controller::{Controller, NvmeControllerError},
-    controller_info::ControllerInfo,
+    controller_info::{ControllerInfo, NvmeVersion},
     logpage::{LogPageBytesError, LogPageName},
     temperature::Temperature,
 };
@@ -168,8 +168,7 @@ pub struct ThermalManagement {
 /// Controller properties that determine which health fields are meaningful.
 #[derive(Debug, Clone, Copy)]
 struct HealthContext {
-    /// NVMe version as `(major, minor)`.
-    version: (u16, u16),
+    version: NvmeVersion,
     /// Volatile write cache present.
     vwc_present: bool,
     /// Warning Composite Temperature Threshold.
@@ -189,7 +188,7 @@ impl HealthContext {
     }
 
     fn at_least(&self, major: u16, minor: u16) -> bool {
-        self.version >= (major, minor)
+        self.version >= NvmeVersion { major, minor }
     }
 }
 
@@ -330,8 +329,12 @@ mod tests {
     use super::*;
     use zerocopy::FromZeros;
 
+    const fn version(major: u16, minor: u16) -> NvmeVersion {
+        NvmeVersion { major, minor }
+    }
+
     const CTX: HealthContext = HealthContext {
-        version: (1, 4),
+        version: version(1, 4),
         vwc_present: false,
         wctemp: Temperature::from_kelvin(343),
         cctemp: Temperature::from_kelvin(353),
@@ -391,7 +394,8 @@ mod tests {
     fn critical_warnings() {
         let mut log = micron_sample();
         log.hl_crit_warn = 0x7f;
-        let ctx = HealthContext { version: (2, 3), vwc_present: true, ..CTX };
+        let ctx =
+            HealthContext { version: version(2, 3), vwc_present: true, ..CTX };
         let cw = HealthLogPage::init(log, &ctx).critical_warnings;
         assert!(cw.available_spare_low && cw.temperature && cw.read_only);
         assert!(cw.reliability_degraded);
@@ -435,7 +439,7 @@ mod tests {
         );
         assert_eq!(h.critical_warnings.indeterminate_personality_state, None);
 
-        let ctx = HealthContext { version: (1, 1), ..CTX };
+        let ctx = HealthContext { version: version(1, 1), ..CTX };
         let h = HealthLogPage::init(micron_sample(), &ctx);
         assert_eq!(
             h.critical_warnings.persistent_memory_region_read_only,
@@ -446,7 +450,7 @@ mod tests {
         assert_eq!(h.warning_temperature_minutes, None);
         assert!(h.thermal_management.is_none());
 
-        let ctx = HealthContext { version: (1, 2), wctemp: None, ..CTX };
+        let ctx = HealthContext { version: version(1, 2), wctemp: None, ..CTX };
         let h = HealthLogPage::init(micron_sample(), &ctx);
         assert_eq!(h.temperature_sensors.len(), 3);
         assert_eq!(h.warning_temperature_minutes, None);
