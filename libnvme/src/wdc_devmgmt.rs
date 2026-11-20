@@ -197,7 +197,9 @@ fn cbs_text(data: &[u8]) -> Option<String> {
 pub enum DevMgmtError {
     #[error(transparent)]
     ControllerError(#[from] NvmeControllerError),
-    #[error("malformed device manageability log at offset {offset}: {reason}")]
+    #[error(
+        "malformed device manageability log at offset {offset:#x}: {reason}"
+    )]
     Malformed { offset: usize, reason: &'static str },
     #[error(
         "device manageability log is {size} bytes, more than the {max} \
@@ -502,7 +504,8 @@ mod tests {
         // An entry length shorter than its header must not loop forever.
         let mut bad = NVME4.to_vec();
         bad[8..12].copy_from_slice(&4u32.to_le_bytes());
-        assert!(DevMgmtLog::parse(&bad).is_err());
+        let err = DevMgmtLog::parse(&bad).unwrap_err();
+        assert!(err.to_string().contains("at offset 0x8:"));
         // An entry length that runs past the end of the log.
         let mut bad = NVME4.to_vec();
         bad[8..12].copy_from_slice(&0xffff_fff0u32.to_le_bytes());
