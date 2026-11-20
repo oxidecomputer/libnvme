@@ -65,8 +65,8 @@ pub(crate) struct LogPageInfo<'a> {
 pub enum LogPageName {
     Firmware,
     Health,
-    WdcDevMgmt,
-    WdcEol,
+    WdcSn840DevMgmt,
+    WdcSn840Eol,
 }
 
 impl LogPageName {
@@ -74,8 +74,8 @@ impl LogPageName {
         match self {
             LogPageName::Firmware => c"firmware",
             LogPageName::Health => c"health",
-            LogPageName::WdcDevMgmt => c"wdc/devmgmt",
-            LogPageName::WdcEol => c"wdc/eol",
+            LogPageName::WdcSn840DevMgmt => c"wdc/devmgmt",
+            LogPageName::WdcSn840Eol => c"wdc/eol",
         }
     }
 }

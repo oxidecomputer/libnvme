@@ -21,9 +21,7 @@ mod logpage;
 pub mod namespace;
 pub mod temperature;
 mod util;
-mod wdc;
-pub mod wdc_devmgmt;
-pub mod wdc_eol;
+pub mod wdc;
 
 use libnvme_sys::nvme::*;
 

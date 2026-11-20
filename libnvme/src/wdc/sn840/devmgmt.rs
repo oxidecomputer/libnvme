@@ -17,7 +17,7 @@ use thiserror::Error;
 use crate::{
     controller::{Controller, NvmeControllerError},
     logpage::{LogPageBytesError, LogPageName},
-    wdc_eol::EolState,
+    wdc::sn840::EolState,
 };
 
 /// The text an unset customer identifier entry holds. Some SN840 firmware
@@ -352,18 +352,21 @@ impl DevMgmtLog {
 }
 
 impl<'a> Controller<'a> {
-    /// Get the controller's WDC Device Manageability log page. Only
-    /// controllers that list `wdc/devmgmt` in
-    /// [`Controller::log_page_discovery`] support it.
-    pub fn get_wdc_devmgmt_log_page(&self) -> Result<DevMgmtLog, DevMgmtError> {
-        let buf = self.get_logpage_bytes(LogPageName::WdcDevMgmt).map_err(
-            |e| match e {
+    /// Get the controller's WDC Device Manageability log page, decoded with
+    /// the SN840's identifiers. Only controllers that list `wdc/devmgmt` in
+    /// [`Controller::log_page_discovery`] support it; illumos defines that
+    /// log page for the SN840 alone.
+    pub fn get_wdc_sn840_devmgmt_log_page(
+        &self,
+    ) -> Result<DevMgmtLog, DevMgmtError> {
+        let buf = self
+            .get_logpage_bytes(LogPageName::WdcSn840DevMgmt)
+            .map_err(|e| match e {
                 LogPageBytesError::Controller(e) => e.into(),
                 LogPageBytesError::TooLarge { size, max } => {
                     DevMgmtError::TooLarge { size, max }
                 }
-            },
-        )?;
+            })?;
         DevMgmtLog::parse(&buf)
     }
 }
