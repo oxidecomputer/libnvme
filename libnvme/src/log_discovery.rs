@@ -20,8 +20,25 @@ pub struct DiscoveredLogPage {
     pub description: String,
     /// Whether the controller implements this log page.
     pub implemented: bool,
-    /// The scopes (`NVME_LOG_SCOPE_*`) the log page applies to.
-    pub scopes: u32,
+    pub scopes: LogPageScopes,
+}
+
+/// What a log page's data describes. A page can have more than one scope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LogPageScopes {
+    pub controller: bool,
+    pub nvm_subsystem: bool,
+    pub namespace: bool,
+}
+
+impl LogPageScopes {
+    fn from_raw(raw: nvme_log_disc_scope_t) -> Self {
+        Self {
+            controller: raw & NVME_LOG_SCOPE_CTRL != 0,
+            nvm_subsystem: raw & NVME_LOG_SCOPE_NVM != 0,
+            namespace: raw & NVME_LOG_SCOPE_NS != 0,
+        }
+    }
 }
 
 fn cstr(p: *const c_char) -> String {
@@ -76,7 +93,9 @@ impl<'a> LogPageDiscovery<'a> {
                 name: cstr(unsafe { nvme_log_disc_name(disc) }),
                 description: cstr(unsafe { nvme_log_disc_desc(disc) }),
                 implemented: unsafe { nvme_log_disc_impl(disc) },
-                scopes: unsafe { nvme_log_disc_scopes(disc) },
+                scopes: LogPageScopes::from_raw(unsafe {
+                    nvme_log_disc_scopes(disc)
+                }),
             })),
             NVME_ITER_DONE => Ok(None),
             NVME_ITER_ERROR => Err(self
@@ -121,5 +140,30 @@ impl<'a> Controller<'a> {
             }
         }
         Ok(pages)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scopes_from_raw() {
+        assert_eq!(
+            LogPageScopes::from_raw(NVME_LOG_SCOPE_CTRL | NVME_LOG_SCOPE_NS),
+            LogPageScopes {
+                controller: true,
+                nvm_subsystem: false,
+                namespace: true,
+            }
+        );
+        assert_eq!(
+            LogPageScopes::from_raw(NVME_LOG_SCOPE_NVM),
+            LogPageScopes {
+                controller: false,
+                nvm_subsystem: true,
+                namespace: false,
+            }
+        );
     }
 }
