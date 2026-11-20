@@ -13,11 +13,11 @@ use crate::{
 
 /// A log page known to libnvme for a controller.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LogPageDisc {
+pub struct DiscoveredLogPage {
     /// The libnvme short name, e.g. `health` or `wdc/devmgmt`.
     pub name: String,
     /// A human readable description.
-    pub desc: String,
+    pub description: String,
     /// Whether the controller implements this log page.
     pub implemented: bool,
     /// The scopes (`NVME_LOG_SCOPE_*`) the log page applies to.
@@ -33,18 +33,18 @@ fn cstr(p: *const c_char) -> String {
 
 /// Iterates the log pages libnvme knows about for a controller, including
 /// vendor-specific ones for devices it recognizes.
-pub struct LogDiscovery<'a> {
+pub struct LogPageDiscovery<'a> {
     controller: &'a Controller<'a>,
     iter: *mut nvme_log_iter_t,
 }
 
-impl<'a> Drop for LogDiscovery<'a> {
+impl<'a> Drop for LogPageDiscovery<'a> {
     fn drop(&mut self) {
         unsafe { nvme_log_discover_fini(self.iter) }
     }
 }
 
-impl<'a> LogDiscovery<'a> {
+impl<'a> LogPageDiscovery<'a> {
     fn new(
         controller: &'a Controller<'_>,
         scope: nvme_log_disc_scope_t,
@@ -62,19 +62,19 @@ impl<'a> LogDiscovery<'a> {
                 },
                 || "failed to init nvme log page discovery",
             )
-            .map(|_| LogDiscovery { controller, iter })
+            .map(|_| LogPageDiscovery { controller, iter })
     }
 
     fn internal_step(
         &self,
-    ) -> Result<Option<LogPageDisc>, NvmeControllerError> {
+    ) -> Result<Option<DiscoveredLogPage>, NvmeControllerError> {
         // The returned disc is owned by the iterator and is only valid until
         // the next step, so copy out what we need.
         let mut disc: *const nvme_log_disc_t = std::ptr::null();
         match unsafe { nvme_log_discover_step(self.iter, &mut disc) } {
-            NVME_ITER_VALID => Ok(Some(LogPageDisc {
+            NVME_ITER_VALID => Ok(Some(DiscoveredLogPage {
                 name: cstr(unsafe { nvme_log_disc_name(disc) }),
-                desc: cstr(unsafe { nvme_log_disc_desc(disc) }),
+                description: cstr(unsafe { nvme_log_disc_desc(disc) }),
                 implemented: unsafe { nvme_log_disc_impl(disc) },
                 scopes: unsafe { nvme_log_disc_scopes(disc) },
             })),
@@ -89,8 +89,8 @@ impl<'a> LogDiscovery<'a> {
     }
 }
 
-impl<'a> Iterator for LogDiscovery<'a> {
-    type Item = Result<LogPageDisc, NvmeControllerError>;
+impl<'a> Iterator for LogPageDiscovery<'a> {
+    type Item = Result<DiscoveredLogPage, NvmeControllerError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.internal_step().transpose()
@@ -100,18 +100,19 @@ impl<'a> Iterator for LogDiscovery<'a> {
 impl<'a> Controller<'a> {
     /// Discover the controller's log pages, as `nvmeadm list-logpages` does:
     /// controller and NVM subsystem scoped pages. Use
-    /// [`LogPageDisc::implemented`] to find the ones the controller supports.
+    /// [`DiscoveredLogPage::implemented`] to find the ones the controller
+    /// supports.
     pub fn log_page_discovery(
         &self,
-    ) -> Result<LogDiscovery<'_>, NvmeControllerError> {
-        LogDiscovery::new(self, NVME_LOG_SCOPE_CTRL | NVME_LOG_SCOPE_NVM)
+    ) -> Result<LogPageDiscovery<'_>, NvmeControllerError> {
+        LogPageDiscovery::new(self, NVME_LOG_SCOPE_CTRL | NVME_LOG_SCOPE_NVM)
     }
 
     /// The log pages from [`Controller::log_page_discovery`] that the
     /// controller implements.
     pub fn implemented_log_pages(
         &self,
-    ) -> Result<Vec<LogPageDisc>, NvmeControllerError> {
+    ) -> Result<Vec<DiscoveredLogPage>, NvmeControllerError> {
         let mut pages = Vec::new();
         for disc in self.log_page_discovery()? {
             let disc = disc?;
