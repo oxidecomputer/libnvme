@@ -94,7 +94,7 @@ impl From<u32> for EolState {
 
 #[derive(Debug, Error)]
 pub enum EolError {
-    #[error("libnvme error: {0}")]
+    #[error(transparent)]
     ControllerError(#[from] NvmeControllerError),
     #[error("EOL log is {len} bytes, shorter than the {EOL_LOG_LEN} expected")]
     TooShort { len: usize },
