@@ -39,8 +39,8 @@ const VSD_HDR_LEN: usize = 8;
 /// simple approach that makes the decoded data easier to use than if every
 /// field were a `Vec`.
 ///
-/// The identifiers and their types are the SN840's. This is non-exhaustive
-/// so that fields can be added for identifiers other devices report.
+/// This is non-exhaustive so that fields can be added as illumos defines
+/// more identifiers.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
@@ -117,10 +117,8 @@ pub struct DevMgmtLog {
     pub vca_tpc_rst_seq: Option<u32>,
     /// 0x23
     pub vca_tpc_fss_seq: Option<u32>,
-    /// Entries that weren't decoded into a field above, in log order,
-    /// skipping unset customer identifiers: those with identifiers illumos
-    /// doesn't define, and those whose data doesn't fit the type the SN840
-    /// uses for their identifier.
+    /// Entries with identifiers illumos doesn't define, in log order,
+    /// skipping unset customer identifiers.
     pub unknown: Vec<UnknownEntry>,
 }
 
@@ -150,9 +148,7 @@ impl From<u32> for ThermalThrottleStatus {
     }
 }
 
-/// An entry that wasn't decoded into a field of [`DevMgmtLog`]: one with an
-/// unknown identifier, or with a known identifier but data that doesn't fit
-/// the type the SN840 uses for it, as another device might report.
+/// An entry with an identifier illumos doesn't define.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UnknownEntry {
@@ -239,7 +235,8 @@ fn cbs_str(data: &[u8]) -> Option<String> {
 }
 
 impl DevMgmtLog {
-    /// Decode a raw Device Manageability log page.
+    /// Decode a raw Device Manageability log page. It is an error for an
+    /// entry's data not to fit its identifier's type.
     pub fn parse(buf: &[u8]) -> Result<Self, DevMgmtError> {
         let malformed =
             |offset, reason| DevMgmtError::Malformed { offset, reason };
@@ -274,30 +271,25 @@ impl DevMgmtLog {
                 .checked_add(len)
                 .filter(|&next| next <= end)
                 .ok_or_else(|| malformed(off, "entry extends past the log"))?;
-            log.set(id, &buf[off + VSD_HDR_LEN..next]);
+            if !log.set(id, &buf[off + VSD_HDR_LEN..next]) {
+                return Err(malformed(off, "entry data doesn't fit its type"));
+            }
             off = next;
         }
 
         Ok(log)
     }
 
-    /// Store an entry's value in its field, or in `unknown` if its
-    /// identifier is unknown or its data doesn't fit the identifier's type.
-    ///
-    /// A mismatched entry isn't an error: the rest of the log is still
-    /// worth having, and a device other than the SN840 may use a different
-    /// type for an identifier.
-    fn set(&mut self, id: u32, data: &[u8]) {
-        /// Returns false, leaving the field alone, if there is no value.
+    /// Store an entry's value in its field, or in `unknown` if illumos
+    /// doesn't define its identifier. Returns false if the data doesn't fit
+    /// the identifier's type.
+    fn set(&mut self, id: u32, data: &[u8]) -> bool {
         fn put<T>(field: &mut Option<T>, value: Option<T>) -> bool {
-            let decoded = value.is_some();
-            if decoded {
-                *field = value;
-            }
-            decoded
+            *field = value;
+            field.is_some()
         }
         let bytes = |data| cbs(data).map(<[u8]>::to_vec);
-        let decoded = match id {
+        match id {
             0x01 => put(&mut self.id, u32_value(data)),
             0x02 => put(&mut self.uefi_ver, cbs_str(data)),
             0x03 => put(&mut self.sbl_ver, cbs_str(data)),
@@ -339,13 +331,13 @@ impl DevMgmtLog {
             0x21 => put(&mut self.vca_bpc_rst_seq, u32_value(data)),
             0x22 => put(&mut self.vca_tpc_rst_seq, u32_value(data)),
             0x23 => put(&mut self.vca_tpc_fss_seq, u32_value(data)),
-            _ => false,
-        };
-        if !decoded {
-            let value = UnknownValue::decode(data);
-            if !matches!(&value, UnknownValue::Text(t) if t == UNSET_CUSTOMER_ID)
-            {
-                self.unknown.push(UnknownEntry { id, value });
+            _ => {
+                let value = UnknownValue::decode(data);
+                if !matches!(&value, UnknownValue::Text(t) if t == UNSET_CUSTOMER_ID)
+                {
+                    self.unknown.push(UnknownEntry { id, value });
+                }
+                true
             }
         }
     }
@@ -481,47 +473,21 @@ mod tests {
     }
 
     #[test]
-    fn mismatched_entries_are_kept_as_unknown() {
-        // Log header, then: def_user_cap (a u64) with 4 bytes of data, id (a
-        // u32) with 8, name (a counted byte string) whose count runs past
-        // its data, and a well-formed assert_dump.
-        let mut buf = Vec::new();
-        for word in
-            [64u32, 0, 12, 0x04, 7, 16, 0x01, 1, 2, 16, 0x07, 9, 0, 12, 0x19, 1]
+    fn rejects_mismatched_entries() {
+        // Log header and a well-formed assert_dump, then one of:
+        // def_user_cap (a u64) with 4 bytes of data, id (a u32) with 8, and
+        // name (a counted byte string) whose count runs past its data.
+        for bad in [&[12u32, 0x04, 7][..], &[16, 0x01, 1, 2], &[16, 0x07, 9, 0]]
         {
-            buf.extend_from_slice(&word.to_le_bytes());
+            let mut words = vec![0u32, 0, 12, 0x19, 1];
+            words.extend_from_slice(bad);
+            words[0] = 4 * words.len() as u32;
+            let buf: Vec<u8> =
+                words.iter().flat_map(|w| w.to_le_bytes()).collect();
+            let err = DevMgmtLog::parse(&buf).unwrap_err();
+            assert!(err.to_string().contains("at offset 0x14:"), "{err}");
+            assert!(err.to_string().contains("doesn't fit"), "{err}");
         }
-        let log = DevMgmtLog::parse(&buf).unwrap();
-        assert_eq!(log.def_user_cap, None);
-        assert_eq!(log.id, None);
-        assert_eq!(log.name, None);
-        assert_eq!(log.assert_dump, Some(1));
-        let bytes = |words: &[u32]| {
-            UnknownValue::Bytes(
-                words.iter().flat_map(|w| w.to_le_bytes()).collect(),
-            )
-        };
-        assert_eq!(
-            log.unknown,
-            [
-                UnknownEntry { id: 0x04, value: bytes(&[7]) },
-                UnknownEntry { id: 0x01, value: bytes(&[1, 2]) },
-                UnknownEntry { id: 0x07, value: bytes(&[9, 0]) },
-            ]
-        );
-    }
-
-    #[test]
-    fn mismatched_entry_keeps_earlier_value() {
-        // Log header plus two assert_dump entries: a u32, then one with 8
-        // bytes of data.
-        let mut buf = Vec::new();
-        for word in [36u32, 0, 12, 0x19, 1, 16, 0x19, 0, 0] {
-            buf.extend_from_slice(&word.to_le_bytes());
-        }
-        let log = DevMgmtLog::parse(&buf).unwrap();
-        assert_eq!(log.assert_dump, Some(1));
-        assert_eq!(log.unknown.len(), 1);
     }
 
     #[test]
