@@ -78,10 +78,12 @@ pub struct CriticalWarnings {
     /// Volatile memory backup device has failed. `None` if the controller
     /// has no volatile write cache.
     pub volatile_memory_backup_failed: Option<bool>,
-    /// Persistent Memory Region has become read-only or unreliable (1.4).
+    /// Persistent Memory Region has become read-only or unreliable. `None`
+    /// if the controller's NVMe version is before 1.4.
     pub persistent_memory_region_read_only: Option<bool>,
     /// A change to a personality's settings did not complete and could not be
-    /// reverted, leaving them in an indeterminate state (2.3).
+    /// reverted, leaving them in an indeterminate state. `None` if the
+    /// controller's NVMe version is before 2.3.
     pub indeterminate_personality_state: Option<bool>,
 }
 
@@ -110,7 +112,8 @@ pub struct EnduranceGroupWarnings {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HealthLogPage {
     pub critical_warnings: CriticalWarnings,
-    /// Endurance Group critical warnings (1.4).
+    /// Endurance Group critical warnings. `None` if the controller's NVMe
+    /// version is before 1.4.
     pub endurance_group_warnings: Option<EnduranceGroupWarnings>,
     /// Composite temperature. `None` if the controller reports 0 K, which
     /// isn't a valid reading.
@@ -132,15 +135,19 @@ pub struct HealthLogPage {
     pub unsafe_shutdowns: u128,
     pub media_errors: u128,
     pub error_log_entries: u128,
-    /// Minutes above the warning composite temperature threshold (1.2), if
-    /// the controller reports one.
+    /// Minutes above the warning composite temperature threshold. `None` if
+    /// the controller's NVMe version is before 1.2, or it reports no warning
+    /// threshold.
     pub warning_temperature_minutes: Option<u32>,
-    /// Minutes above the critical composite temperature threshold (1.2), if
-    /// the controller reports one.
+    /// Minutes above the critical composite temperature threshold. `None` if
+    /// the controller's NVMe version is before 1.2, or it reports no critical
+    /// threshold.
     pub critical_temperature_minutes: Option<u32>,
-    /// The implemented temperature sensors (1.2).
+    /// The implemented temperature sensors. Empty if the controller's NVMe
+    /// version is before 1.2.
     pub temperature_sensors: Vec<TemperatureSensor>,
-    /// Thermal management statistics (1.3).
+    /// Thermal management statistics. `None` if the controller's NVMe
+    /// version is before 1.3.
     pub thermal_management: Option<ThermalManagement>,
 }
 
