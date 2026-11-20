@@ -36,8 +36,12 @@ const VSD_HDR_LEN: usize = 8;
 /// Repeated identifiers aren't expected, so keeping the last value is a
 /// simple approach that makes the decoded data easier to use than if every
 /// field were a `Vec`.
+///
+/// The identifiers and their types are the SN840's. This is non-exhaustive
+/// so that fields can be added for identifiers other devices report.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct DevMgmtLog {
     /// Log version (the identifier of the log header).
     pub version: u32,
