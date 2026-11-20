@@ -41,7 +41,10 @@ impl LogPageScopes {
     }
 }
 
-fn cstr(p: *const c_char) -> String {
+/// # Safety
+///
+/// `p` must be null or point to a NUL-terminated string.
+unsafe fn cstr(p: *const c_char) -> String {
     if p.is_null() {
         return String::new();
     }
@@ -90,8 +93,8 @@ impl<'a> LogPageDiscovery<'a> {
         let mut disc: *const nvme_log_disc_t = std::ptr::null();
         match unsafe { nvme_log_discover_step(self.iter, &mut disc) } {
             NVME_ITER_VALID => Ok(Some(DiscoveredLogPage {
-                name: cstr(unsafe { nvme_log_disc_name(disc) }),
-                description: cstr(unsafe { nvme_log_disc_desc(disc) }),
+                name: unsafe { cstr(nvme_log_disc_name(disc)) },
+                description: unsafe { cstr(nvme_log_disc_desc(disc)) },
                 implemented: unsafe { nvme_log_disc_impl(disc) },
                 scopes: LogPageScopes::from_raw(unsafe {
                     nvme_log_disc_scopes(disc)
