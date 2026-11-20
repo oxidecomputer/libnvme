@@ -8,12 +8,84 @@ use std::{env, path::PathBuf};
 
 extern crate libnvme_sys;
 
+/// Types that are only ever used behind a pointer.
+const OPAQUE: &[&str] = &[
+    "nvme",
+    "nvme_ctrl_iter",
+    "nvme_ctrl_disc",
+    "nvme_ctrl",
+    "nvme_ctrl_info",
+    "nvme_ns_iter",
+    "nvme_ns_disc",
+    "nvme_ns",
+    "nvme_ns_info",
+    "nvme_log_disc",
+    "nvme_log_req",
+    "nvme_nvm_lba_fmt",
+    "nvme_fw_commit_req",
+    "nvme_format_req",
+    "di_node",
+];
+
+/// Fields of `nvme_identify_ctrl` that are a group of bitfields in C.
+const ID_BITFIELDS: &[&str] = &[
+    "id_mic",
+    "id_oaes",
+    "id_ctratt",
+    "id_nvmsr",
+    "id_vpdwc",
+    "id_mec",
+    "id_oacs",
+    "id_frmw",
+    "id_lpa",
+    "id_avscc",
+    "id_apsta",
+    "ap_rpmbs",
+    "ap_dsto",
+    "ap_hctma",
+    "ap_sanitize",
+    "ap_anacap",
+    "id_sqes",
+    "id_cqes",
+    "id_oncs",
+    "id_fuses",
+    "id_fna",
+    "id_vwc",
+    "id_nvscc",
+    "id_nwpc",
+    "id_sgls",
+];
+
+/// Fields of `nvme_idctl_psd_t` that are one or more bitfields in C.
+const PSD_BITFIELDS: &[&str] = &[
+    "psd_mps_nops_bits",
+    "psd_rrt_bits",
+    "psd_rrl_bits",
+    "psd_rwt_bits",
+    "psd_rwl_bits",
+    "psd_ips_bits",
+    "psd_apw_aps_bits",
+    "psd_epfrts_fqvts_bits",
+    "psd_epfvts_bits",
+    "psd_mbws_bits",
+];
+
+/// Reserved fields of `nvme_identify_ctrl` that the C header has since split
+/// up to make room for new fields.
+const ID_STALE_RESERVED: &[&str] = &[
+    "id_rsvd_cc",
+    "id_rsvd2_cc",
+    "id_rsvd_ac",
+    "id_rsvd_nc_3",
+    "id_rsvd_nc_4",
+];
+
 fn main() {
     // This is a bit of a hack, but we want this to always rerun as the users
     // GATE_SRC checkout may have changed.
     println!("cargo:rerun-if-changed=./target");
 
-    let mut cfg = ctest2::TestGenerator::new();
+    let mut cfg = ctest::TestGenerator::new();
 
     // We cannot proceed without a path to the source
     let gate_dir = match env::var("GATE_SRC").map(PathBuf::try_from) {
@@ -33,120 +105,31 @@ fn main() {
 
     cfg.header("libnvme.h");
 
-    cfg.skip_struct(|name| match name {
-        // Skip over the opaque types
-        "nvme" => true,
-        "nvme_ctrl_iter" => true,
-        "nvme_ctrl_disc" => true,
-        "nvme_ctrl" => true,
-        "nvme_ctrl_info" => true,
-        "nvme_ns_iter" => true,
-        "nvme_ns_disc" => true,
-        "nvme_ns" => true,
-        "nvme_ns_info" => true,
-        "nvme_log_disc" => true,
-        "nvme_log_req" => true,
-        "nvme_nvm_lba_fmt" => true,
-        "nvme_fw_commit_req" => true,
-        "nvme_format_req" => true,
-        "di_node" => true,
+    cfg.skip_private(true);
+    cfg.skip_struct(|s| OPAQUE.contains(&s.ident()));
+    cfg.skip_alias(|t| {
+        t.ident().strip_suffix("_t").is_some_and(|name| OPAQUE.contains(&name))
+    });
 
-        // Skip over u128
-        "nvme_uint128_t" => true,
+    // These are typedefs of anonymous structs in C.
+    cfg.rename_struct_ty(|ty| match ty {
+        "nvme_identify_ctrl" => Some("nvme_identify_ctrl_t".to_string()),
+        ty if ty.ends_with("_t") => Some(ty.to_string()),
+        _ => None,
+    });
 
-        // Skip over bitfield structs
-        "nvme_fwslot_log_t" => true,
-        "nvme_idctl_qes_t" => true,
-        "nvme_idctl_psd_t" => true,
-        "nvme_idctl_psd_t_chunk_1" => true,
-        "nvme_idctl_psd_t_chunk_2" => true,
-        "nvme_idctl_psd_t_chunk_3" => true,
-        "nvme_fwslot_log_t_bitfield1" => true,
-        "IdMic" => true,
-        "IdOaes" => true,
-        "IdCtratt" => true,
-        "IdNvmsr" => true,
-        "IdVpdwc" => true,
-        "IdMec" => true,
-        "IdOacs" => true,
-        "IdFrmw" => true,
-        "IdLpa" => true,
-        "IdAvscc" => true,
-        "IdApsta" => true,
-        "ApRpmbs" => true,
-        "ApDsto" => true,
-        "ApHctma" => true,
-        "ApSanitize" => true,
-        "ApAnacap" => true,
-        "IdOncs" => true,
-        "IdFuses" => true,
-        "IdFna" => true,
-        "IdVwc" => true,
-        "IdNvscc" => true,
-        "IdNwpc" => true,
-        "IdSgls" => true,
-        "nvme_identify_ctrl" => true,
-
+    // Fields with no C counterpart to compare against.
+    cfg.skip_struct_field(|s, f| match s.ident() {
+        "nvme_fwslot_log_t" => f.ident() == "fw_afi_next_bits",
+        "nvme_idctl_psd_t" => PSD_BITFIELDS.contains(&f.ident()),
+        "nvme_identify_ctrl" => ID_STALE_RESERVED.contains(&f.ident()),
         _ => false,
     });
 
-    cfg.skip_type(|name| match name {
-        // Skip over the opaque types
-        "nvme_t" => true,
-        "nvme_ctrl_iter_t" => true,
-        "nvme_ctrl_disc_t" => true,
-        "nvme_ctrl_t" => true,
-        "nvme_ctrl_info_t" => true,
-        "nvme_ns_iter_t" => true,
-        "nvme_ns_disc_t" => true,
-        "nvme_ns_t" => true,
-        "nvme_ns_info_t" => true,
-        "nvme_log_disc_t" => true,
-        "nvme_log_req_t" => true,
-        "nvme_nvm_lba_fmt_t" => true,
-        "nvme_fw_commit_req_t" => true,
-        "nvme_format_req_t" => true,
-        "di_node_t" => true,
-
-        // Skip over u128
-        "nvme_uint128_t" => true,
-
-        // Skip over bitfield structs
-        "nvme_fwslot_log_t" => true,
-        "nvme_idctl_qes_t" => true,
-        "nvme_idctl_psd_t" => true,
-        "nvme_idctl_psd_t_chunk_1" => true,
-        "nvme_idctl_psd_t_chunk_2" => true,
-        "nvme_idctl_psd_t_chunk_3" => true,
-        "nvme_fwslot_log_t_bitfield1" => true,
-        "IdMic" => true,
-        "IdOaes" => true,
-        "IdCtratt" => true,
-        "IdNvmsr" => true,
-        "IdVpdwc" => true,
-        "IdMec" => true,
-        "IdOacs" => true,
-        "IdFrmw" => true,
-        "IdLpa" => true,
-        "IdAvscc" => true,
-        "IdApsta" => true,
-        "ApRpmbs" => true,
-        "ApDsto" => true,
-        "ApHctma" => true,
-        "ApSanitize" => true,
-        "ApAnacap" => true,
-        "IdOncs" => true,
-        "IdFuses" => true,
-        "IdFna" => true,
-        "IdVwc" => true,
-        "IdNvscc" => true,
-        "IdNwpc" => true,
-        "IdSgls" => true,
-        "nvme_identify_ctrl" => true,
-        "nvme_identify_ctrl_t" => true,
-
-        _ => false,
+    // These are bitfields in C, so only their offset and size can be compared.
+    cfg.skip_struct_field_type(|s, f| {
+        s.ident() == "nvme_identify_ctrl" && ID_BITFIELDS.contains(&f.ident())
     });
 
-    cfg.generate("../src/lib.rs", "main.rs");
+    ctest::generate_test(&mut cfg, "../src/lib.rs", "main.rs").unwrap();
 }

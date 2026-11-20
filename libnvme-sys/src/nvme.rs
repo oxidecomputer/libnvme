@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use bitfield_struct::bitfield;
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use super::devinfo::di_node;
@@ -152,29 +151,13 @@ pub const NVME_FWC_ACTIVATE_IMMED: u32 = 3;
 
 const NVME_FWVER_SZ: usize = 8;
 
-#[bitfield(u8)]
-pub struct nvme_fwslot_log_t_bitfield1 {
-    /// Active Firmware Slot
-    #[bits(3, access = RO)]
-    pub fw_afi: u8,
-    #[bits(1)]
-    __: u8, // fw_rsvd1
-    /// Next Active Firmware Slot
-    #[bits(3, access = RO)]
-    pub fw_next: u8,
-    #[bits(1)]
-    /// fw_rsvd2
-    __: B1,
-}
-
 #[repr(C)]
 #[derive(Debug)]
 pub struct nvme_fwslot_log_t {
-    // fw_afi and fw_next
-    pub bitfield1: nvme_fwslot_log_t_bitfield1,
-    _reserved1: [u8; 7],
+    pub fw_afi_next_bits: u8,
+    pub fw_rsvd3: [u8; 7],
     pub fw_frs: [[c_char; NVME_FWVER_SZ]; 7],
-    _reserved2: [u8; 512 - 64],
+    pub fw_rsvd4: [u8; 512 - 64],
 }
 
 opaque_type!(nvme, nvme_t);
@@ -192,8 +175,6 @@ opaque_type!(nvme_log_disc, nvme_log_disc_t);
 opaque_type!(nvme_log_req, nvme_log_req_t);
 opaque_type!(nvme_fw_commit_req, nvme_fw_commit_req_t);
 
-// Using "super" here rather than "crate" because `ctest2` does not support rust
-// 2018 edition.
 pub type nvme_identify_ctrl_t = super::identify::nvme_identify_ctrl;
 
 #[link(name = "nvme")]

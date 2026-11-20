@@ -7,6 +7,7 @@ members = [
 ]
 
 [workspace.dependencies]
+bitfield-struct = "0.6.0"
 nvme = { path = "nvme" }
 libnvme-sys = { path = "libnvme-sys" }
 thiserror = "1.0.51"

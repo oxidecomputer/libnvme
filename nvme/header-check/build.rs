@@ -13,7 +13,7 @@ fn main() {
     // GATE_SRC checkout may have changed.
     println!("cargo:rerun-if-changed=./target");
 
-    let mut cfg = ctest2::TestGenerator::new();
+    let mut cfg = ctest::TestGenerator::new();
 
     // We cannot proceed without a path to the source
     let gate_dir = match env::var("GATE_SRC").map(PathBuf::try_from) {
@@ -32,5 +32,5 @@ fn main() {
     }
 
     cfg.header("sys/nvme.h");
-    cfg.generate("../src/lib.rs", "main.rs");
+    ctest::generate_test(&mut cfg, "../src/lib.rs", "main.rs").unwrap();
 }
