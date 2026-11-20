@@ -185,7 +185,7 @@ pub struct nvme_health_log_t {
     pub hl_avail_spare_thr: u8,
     pub hl_used: u8,
     pub hl_ecgcws: u8,
-    _hl_rsvd1: [u8; 32 - 7],
+    pub hl_rsvd1: [u8; 32 - 7],
     pub hl_data_read: nvme_uint128_t,
     pub hl_data_write: nvme_uint128_t,
     pub hl_host_read: nvme_uint128_t,
@@ -215,7 +215,7 @@ pub struct nvme_health_log_t {
     // Added in NVMe 2.3
     pub hl_olec: u64,
     pub hl_ipm: u32,
-    _hl_rsvd2: [u8; 512 - 244],
+    pub hl_rsvd2: [u8; 512 - 244],
 }
 
 const _: () = assert!(std::mem::size_of::<nvme_health_log_t>() == 512);
@@ -233,15 +233,15 @@ const _: () = assert!(std::mem::size_of::<nvme_health_log_t>() == 512);
     )
 )]
 pub struct wdc_vul_sn840_eol_t {
-    eol_rsvd0: [u8; 76],
+    pub eol_rsvd0: [u8; 76],
     pub eol_rbc: u32,
-    eol_rsvd1: [u8; 4],
+    pub eol_rsvd1: [u8; 4],
     pub eol_waf: u32,
     pub eol_plr: u32,
-    eol_rsvd2: [u8; 4],
+    pub eol_rsvd2: [u8; 4],
     pub eol_pfc: u32,
     pub eol_efc: u32,
-    eol_rss3: [u8; 4],
+    pub eol_rss3: [u8; 4],
     pub eol_vendor: u32,
     pub eol_cust_sts: u16,
     pub eol_sys_sts: u16,
