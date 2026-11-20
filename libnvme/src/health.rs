@@ -4,6 +4,7 @@
 
 use std::mem;
 
+use bitfield_struct::bitfield;
 use libnvme_sys::{identify::nvme_uint128_t, nvme::*};
 use thiserror::Error;
 use zerocopy::FromBytes;
@@ -14,6 +15,52 @@ use crate::{
     logpage::{LogPageBytesError, LogPageName},
     temperature::Temperature,
 };
+
+/// `hl_crit_warn` of the SMART / Health log page.
+#[bitfield(u8)]
+struct HlCritWarn {
+    /// available space too low
+    #[bits(1, access = RO)]
+    cw_avail: u8,
+    /// temperature too high
+    #[bits(1, access = RO)]
+    cw_temp: u8,
+    /// degraded reliability
+    #[bits(1, access = RO)]
+    cw_reliab: u8,
+    /// media is read-only
+    #[bits(1, access = RO)]
+    cw_readonly: u8,
+    /// volatile memory backup failed
+    #[bits(1, access = RO)]
+    cw_volatile: u8,
+    /// Persistent Memory Region R/O (1.4)
+    #[bits(1, access = RO)]
+    cw_pmrro: u8,
+    /// Indeterminate Personality State (2.3)
+    #[bits(1, access = RO)]
+    cw_ips: u8,
+    #[bits(1)]
+    __: u8, // cw_rsvd
+}
+
+/// `hl_ecgcws` of the SMART / Health log page.
+#[bitfield(u8)]
+struct HlEcgcws {
+    /// Endurance Group available spare low (1.4)
+    #[bits(1, access = RO)]
+    ecgws_egascbt: u8,
+    #[bits(1)]
+    __: u8, // ecgws_rsvd1
+    /// Endurance Group degraded reliability (1.4)
+    #[bits(1, access = RO)]
+    ecgws_egdr: u8,
+    /// Endurance Group read-only (1.4)
+    #[bits(1, access = RO)]
+    ecgws_egro: u8,
+    #[bits(4)]
+    __: u8, // ecgws_rsvd
+}
 
 /// The Critical Warning field of the SMART / Health log page. Each is `true`
 /// if that warning is raised.
@@ -157,7 +204,7 @@ fn data_units_to_bytes(units: nvme_uint128_t) -> u128 {
 
 impl HealthLogPage {
     fn init(logpage: nvme_health_log_t, ctx: &HealthContext) -> Self {
-        let cw = logpage.hl_crit_warn;
+        let cw = HlCritWarn::from_bits(logpage.hl_crit_warn);
         let v1_2 = ctx.at_least(1, 2);
         let sensors = [
             logpage.hl_temp_sensor_1,
@@ -186,7 +233,7 @@ impl HealthLogPage {
                     .then_some(cw.cw_ips() != 0),
             },
             endurance_group_warnings: ctx.at_least(1, 4).then(|| {
-                let eg = logpage.hl_ecgcws;
+                let eg = HlEcgcws::from_bits(logpage.hl_ecgcws);
                 EnduranceGroupWarnings {
                     available_spare_low: eg.ecgws_egascbt() != 0,
                     reliability_degraded: eg.ecgws_egdr() != 0,
@@ -343,7 +390,7 @@ mod tests {
     #[test]
     fn critical_warnings() {
         let mut log = micron_sample();
-        log.hl_crit_warn = nvme_health_log_t_crit_warn::from_bits(0x7f);
+        log.hl_crit_warn = 0x7f;
         let ctx = HealthContext { version: (2, 3), vwc_present: true, ..CTX };
         let cw = HealthLogPage::init(log, &ctx).critical_warnings;
         assert!(cw.available_spare_low && cw.temperature && cw.read_only);
@@ -357,7 +404,7 @@ mod tests {
     fn endurance_group_warnings() {
         let eg = |bits| {
             let mut log = micron_sample();
-            log.hl_ecgcws = nvme_health_log_t_ecgcws::from_bits(bits);
+            log.hl_ecgcws = bits;
             HealthLogPage::init(log, &CTX).endurance_group_warnings
         };
         // Bit 1 is reserved, and ignored.

@@ -14,6 +14,7 @@ pub mod controller_info;
 mod error;
 pub mod firmware;
 pub mod health;
+mod identify;
 mod lba;
 pub mod log_discovery;
 mod logpage;

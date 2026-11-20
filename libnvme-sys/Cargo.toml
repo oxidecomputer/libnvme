@@ -5,5 +5,5 @@ license = "MPL-2.0"
 edition = "2021"
 
 [dependencies]
-bitfield-struct = "0.6.0"
-zerocopy.workspace = true
+# Optional, as header-check must be able to expand this crate on its own.
+zerocopy = { workspace = true, optional = true }

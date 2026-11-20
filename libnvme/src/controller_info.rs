@@ -9,6 +9,7 @@ use thiserror::Error;
 
 use crate::{
     error::{InternalError, LibraryError},
+    identify::IdVwc,
     lba::LbaFormat,
     temperature::Temperature,
     util::FfiPtr,
@@ -128,7 +129,8 @@ impl ControllerInfo {
     /// Whether the controller has a volatile write cache.
     pub fn volatile_write_cache_present(&self) -> bool {
         let identify = self.get_controller_info_identify();
-        unsafe { (*identify.inner).id_vwc.vwc_present() != 0 }
+        let vwc = IdVwc::from_bits(unsafe { (*identify.inner).id_vwc });
+        vwc.vwc_present() != 0
     }
 
     /// Warning Composite Temperature Threshold, or `None` if the controller

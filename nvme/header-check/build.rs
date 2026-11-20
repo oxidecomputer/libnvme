@@ -4,7 +4,7 @@
 
 #![deny(warnings)]
 
-use std::{env, path::PathBuf};
+use std::{env, fs, path::PathBuf};
 
 extern crate nvme;
 
@@ -13,7 +13,7 @@ fn main() {
     // GATE_SRC checkout may have changed.
     println!("cargo:rerun-if-changed=./target");
 
-    let mut cfg = ctest2::TestGenerator::new();
+    let mut cfg = ctest::TestGenerator::new();
 
     // We cannot proceed without a path to the source
     let gate_dir = match env::var("GATE_SRC").map(PathBuf::try_from) {
@@ -24,13 +24,17 @@ fn main() {
         }
     };
 
-    // We need access to sys/nvme.h which is not shipped in /usr/include
-    let include_paths = ["usr/src/uts/common"];
+    // sys/nvme.h is not shipped in /usr/include. Copy it out of the gate, so
+    // that none of the gate's other headers are picked up with it.
+    let headers = PathBuf::from(env::var("OUT_DIR").unwrap()).join("include");
+    let from = gate_dir.join("usr/src/uts/common/sys/nvme.h");
+    let _ = fs::remove_dir_all(&headers);
+    fs::create_dir_all(headers.join("sys")).unwrap();
+    fs::copy(&from, headers.join("sys/nvme.h"))
+        .unwrap_or_else(|e| panic!("failed to copy {}: {e}", from.display()));
+    cfg.include(&headers);
     cfg.include("/usr/include");
-    for p in include_paths {
-        cfg.include(gate_dir.join(p));
-    }
 
     cfg.header("sys/nvme.h");
-    cfg.generate("../src/lib.rs", "main.rs");
+    ctest::generate_test(&mut cfg, "../src/lib.rs", "main.rs").unwrap();
 }

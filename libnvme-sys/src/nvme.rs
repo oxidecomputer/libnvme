@@ -2,9 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use bitfield_struct::bitfield;
 use std::ffi::{c_char, c_int, c_uint, c_void};
-use zerocopy::{FromBytes, Immutable, KnownLayout, Unaligned};
 
 use super::devinfo::di_node;
 use super::identify::nvme_uint128_t;
@@ -159,30 +157,14 @@ pub const NVME_FWC_ACTIVATE_IMMED: u32 = 3;
 
 const NVME_FWVER_SZ: usize = 8;
 
-#[bitfield(u8)]
-#[derive(FromBytes)]
-pub struct nvme_fwslot_log_t_bitfield1 {
-    /// Active Firmware Slot
-    #[bits(3, access = RO)]
-    pub fw_afi: u8,
-    #[bits(1)]
-    __: u8, // fw_rsvd1
-    /// Next Active Firmware Slot
-    #[bits(3, access = RO)]
-    pub fw_next: u8,
-    #[bits(1)]
-    /// fw_rsvd2
-    __: B1,
-}
-
 #[repr(C)]
-#[derive(Debug, FromBytes)]
+#[derive(Debug)]
+#[cfg_attr(feature = "zerocopy", derive(zerocopy::FromBytes))]
 pub struct nvme_fwslot_log_t {
-    // fw_afi and fw_next
-    pub bitfield1: nvme_fwslot_log_t_bitfield1,
-    _reserved1: [u8; 7],
+    pub fw_afi_next_bits: u8,
+    pub fw_rsvd3: [u8; 7],
     pub fw_frs: [[c_char; NVME_FWVER_SZ]; 7],
-    _reserved2: [u8; 512 - 64],
+    pub fw_rsvd4: [u8; 512 - 64],
 }
 
 #[repr(C)]
@@ -192,62 +174,17 @@ pub struct nvme_version_t {
     pub v_major: u16,
 }
 
-#[bitfield(u8)]
-#[derive(FromBytes)]
-pub struct nvme_health_log_t_crit_warn {
-    /// available space too low
-    #[bits(1, access = RO)]
-    pub cw_avail: u8,
-    /// temperature too high
-    #[bits(1, access = RO)]
-    pub cw_temp: u8,
-    /// degraded reliability
-    #[bits(1, access = RO)]
-    pub cw_reliab: u8,
-    /// media is read-only
-    #[bits(1, access = RO)]
-    pub cw_readonly: u8,
-    /// volatile memory backup failed
-    #[bits(1, access = RO)]
-    pub cw_volatile: u8,
-    /// Persistent Memory Region R/O (1.4)
-    #[bits(1, access = RO)]
-    pub cw_pmrro: u8,
-    /// Indeterminate Personality State (2.3)
-    #[bits(1, access = RO)]
-    pub cw_ips: u8,
-    #[bits(1)]
-    __: u8, // cw_rsvd
-}
-
-#[bitfield(u8)]
-#[derive(FromBytes)]
-pub struct nvme_health_log_t_ecgcws {
-    /// Endurance Group available spare low (1.4)
-    #[bits(1, access = RO)]
-    pub ecgws_egascbt: u8,
-    #[bits(1)]
-    __: u8, // ecgws_rsvd1
-    /// Endurance Group degraded reliability (1.4)
-    #[bits(1, access = RO)]
-    pub ecgws_egdr: u8,
-    /// Endurance Group read-only (1.4)
-    #[bits(1, access = RO)]
-    pub ecgws_egro: u8,
-    #[bits(4)]
-    __: u8, // ecgws_rsvd
-}
-
 /// SMART / Health information log page.
 #[repr(C, packed)]
-#[derive(Debug, FromBytes)]
+#[derive(Debug)]
+#[cfg_attr(feature = "zerocopy", derive(zerocopy::FromBytes))]
 pub struct nvme_health_log_t {
-    pub hl_crit_warn: nvme_health_log_t_crit_warn,
+    pub hl_crit_warn: u8,
     pub hl_temp: u16,
     pub hl_avail_spare: u8,
     pub hl_avail_spare_thr: u8,
     pub hl_used: u8,
-    pub hl_ecgcws: nvme_health_log_t_ecgcws,
+    pub hl_ecgcws: u8,
     _hl_rsvd1: [u8; 32 - 7],
     pub hl_data_read: nvme_uint128_t,
     pub hl_data_write: nvme_uint128_t,
@@ -285,7 +222,16 @@ const _: () = assert!(std::mem::size_of::<nvme_health_log_t>() == 512);
 
 /// WDC SN840 EOL log page (`wdc/eol`), from `sys/nvme/wdc_sn840.h`.
 #[repr(C, packed)]
-#[derive(Debug, Copy, Clone, FromBytes, KnownLayout, Immutable, Unaligned)]
+#[derive(Debug, Copy, Clone)]
+#[cfg_attr(
+    feature = "zerocopy",
+    derive(
+        zerocopy::FromBytes,
+        zerocopy::KnownLayout,
+        zerocopy::Immutable,
+        zerocopy::Unaligned
+    )
+)]
 pub struct wdc_vul_sn840_eol_t {
     eol_rsvd0: [u8; 76],
     pub eol_rbc: u32,
@@ -321,8 +267,6 @@ opaque_type!(nvme_log_disc, nvme_log_disc_t);
 opaque_type!(nvme_log_req, nvme_log_req_t);
 opaque_type!(nvme_fw_commit_req, nvme_fw_commit_req_t);
 
-// Using "super" here rather than "crate" because `ctest2` does not support rust
-// 2018 edition.
 pub type nvme_identify_ctrl_t = super::identify::nvme_identify_ctrl;
 
 #[link(name = "nvme")]

@@ -5,7 +5,8 @@ license = "MPL-2.0"
 edition = "2021"
 
 [dependencies]
-libnvme-sys.workspace = true
+bitfield-struct.workspace = true
+libnvme-sys = { workspace = true, features = ["zerocopy"] }
 nvme.workspace = true
 serde = { workspace = true, optional = true }
 thiserror.workspace = true
