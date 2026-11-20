@@ -20,7 +20,9 @@ use crate::{
     wdc_eol::EolState,
 };
 
-/// The text an unset customer identifier entry holds.
+/// The text an unset customer identifier entry holds. Some SN840 firmware
+/// reports four of these (0x24 through 0x27), which neither illumos nor
+/// nvme-cli interprets.
 const UNSET_CUSTOMER_ID: &str = "CUSTOMER_ID_GENERIC";
 
 /// Size of an entry header (and of the log header).
@@ -151,11 +153,6 @@ impl From<u32> for ThermalThrottleStatus {
 /// An entry that wasn't decoded into a field of [`DevMgmtLog`]: one with an
 /// unknown identifier, or with a known identifier but data that doesn't fit
 /// the type the SN840 uses for it, as another device might report.
-///
-/// In practice SN840s report four (0x24 through 0x27), each containing the
-/// string "CUSTOMER_ID_GENERIC". These appear to be unset customer
-/// identifiers; neither illumos nor nvme-cli interprets them, and they are
-/// left out of [`DevMgmtLog::unknown`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UnknownEntry {
