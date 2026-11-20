@@ -6,6 +6,8 @@ edition = "2021"
 
 [dependencies]
 bitfield-struct.workspace = true
-libnvme-sys.workspace = true
+libnvme-sys = { workspace = true, features = ["zerocopy"] }
 nvme.workspace = true
+serde = { workspace = true, optional = true }
 thiserror.workspace = true
+zerocopy.workspace = true

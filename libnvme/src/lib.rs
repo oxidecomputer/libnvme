@@ -13,12 +13,15 @@ pub mod controller;
 pub mod controller_info;
 mod error;
 pub mod firmware;
+pub mod health;
 mod identify;
 mod lba;
+pub mod log_discovery;
 mod logpage;
 pub mod namespace;
+pub mod temperature;
 mod util;
-mod wdc;
+pub mod wdc;
 
 use libnvme_sys::nvme::*;
 

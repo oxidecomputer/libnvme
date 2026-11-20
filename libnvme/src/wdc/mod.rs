@@ -2,6 +2,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+//! WDC devices. What they have in common is here; what is specific to one
+//! device is in a module named for it.
+
+mod devmgmt;
+pub mod sn840;
+
 use std::ops::Deref;
 
 use crate::{

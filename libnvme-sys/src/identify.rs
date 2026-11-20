@@ -6,6 +6,7 @@ use std::ffi::c_char;
 
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "zerocopy", derive(zerocopy::FromBytes))]
 pub struct nvme_uint128_t {
     pub lo: u64,
     pub hi: u64,

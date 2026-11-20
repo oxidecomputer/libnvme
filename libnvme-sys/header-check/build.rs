@@ -22,6 +22,7 @@ const OPAQUE: &[&str] = &[
     "nvme_ns_disc",
     "nvme_ns",
     "nvme_ns_info",
+    "nvme_log_iter",
     "nvme_log_disc",
     "nvme_log_req",
     "nvme_nvm_lba_fmt",
@@ -69,6 +70,9 @@ const ID_STRUCTS: &[&str] = &[
     "id_sgls",
     "id_trattr",
 ];
+
+/// Fields of `nvme_health_log_t` that are a struct in C but an integer here.
+const HEALTH_STRUCTS: &[&str] = &["hl_crit_warn", "hl_ecgcws", "hl_ipm"];
 
 /// Fields of `nvme_idctl_psd_t` that are one or more bitfields in C.
 const PSD_BITFIELDS: &[&str] = &[
@@ -136,6 +140,7 @@ fn main() {
     cfg.include("/usr/include");
 
     cfg.header("libnvme.h");
+    cfg.header("sys/nvme/wdc_sn840.h");
 
     cfg.skip_private(true);
     cfg.skip_struct(|s| OPAQUE.contains(&s.ident()));
@@ -158,8 +163,10 @@ fn main() {
     });
 
     // Only the offset and size of these can be compared.
-    cfg.skip_struct_field_type(|s, f| {
-        s.ident() == "nvme_identify_ctrl" && ID_STRUCTS.contains(&f.ident())
+    cfg.skip_struct_field_type(|s, f| match s.ident() {
+        "nvme_identify_ctrl" => ID_STRUCTS.contains(&f.ident()),
+        "nvme_health_log_t" => HEALTH_STRUCTS.contains(&f.ident()),
+        _ => false,
     });
 
     ctest::generate_test(&mut cfg, "../src/lib.rs", "main.rs").unwrap();

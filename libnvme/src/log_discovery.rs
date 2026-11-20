@@ -1,0 +1,172 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+use std::ffi::{c_char, CStr};
+
+use libnvme_sys::nvme::*;
+
+use crate::{
+    controller::{Controller, NvmeControllerError},
+    error::LibraryError,
+};
+
+/// A log page known to libnvme for a controller.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscoveredLogPage {
+    /// The libnvme short name, e.g. `health` or `wdc/devmgmt`.
+    pub name: String,
+    /// A human readable description.
+    pub description: String,
+    /// Whether the controller implements this log page.
+    pub implemented: bool,
+    pub scopes: LogPageScopes,
+}
+
+/// What a log page's data describes. A page can have more than one scope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LogPageScopes {
+    pub controller: bool,
+    pub nvm_subsystem: bool,
+    pub namespace: bool,
+}
+
+impl LogPageScopes {
+    fn from_raw(raw: nvme_log_disc_scope_t) -> Self {
+        Self {
+            controller: raw & NVME_LOG_SCOPE_CTRL != 0,
+            nvm_subsystem: raw & NVME_LOG_SCOPE_NVM != 0,
+            namespace: raw & NVME_LOG_SCOPE_NS != 0,
+        }
+    }
+}
+
+/// # Safety
+///
+/// `p` must be null or point to a NUL-terminated string.
+unsafe fn cstr(p: *const c_char) -> String {
+    if p.is_null() {
+        return String::new();
+    }
+    unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned()
+}
+
+/// Iterates the log pages libnvme knows about for a controller, including
+/// vendor-specific ones for devices it recognizes.
+pub struct LogPageDiscovery<'a> {
+    controller: &'a Controller<'a>,
+    iter: *mut nvme_log_iter_t,
+}
+
+impl<'a> Drop for LogPageDiscovery<'a> {
+    fn drop(&mut self) {
+        unsafe { nvme_log_discover_fini(self.iter) }
+    }
+}
+
+impl<'a> LogPageDiscovery<'a> {
+    fn new(
+        controller: &'a Controller<'_>,
+        scope: nvme_log_disc_scope_t,
+    ) -> Result<Self, NvmeControllerError> {
+        let mut iter = std::ptr::null_mut();
+        controller
+            .check_result(
+                unsafe {
+                    nvme_log_discover_init(
+                        controller.inner,
+                        scope,
+                        0,
+                        &mut iter,
+                    )
+                },
+                || "failed to init nvme log page discovery",
+            )
+            .map(|_| LogPageDiscovery { controller, iter })
+    }
+
+    fn internal_step(
+        &self,
+    ) -> Result<Option<DiscoveredLogPage>, NvmeControllerError> {
+        // The returned disc is owned by the iterator and is only valid until
+        // the next step, so copy out what we need.
+        let mut disc: *const nvme_log_disc_t = std::ptr::null();
+        match unsafe { nvme_log_discover_step(self.iter, &mut disc) } {
+            NVME_ITER_VALID => Ok(Some(DiscoveredLogPage {
+                name: unsafe { cstr(nvme_log_disc_name(disc)) },
+                description: unsafe { cstr(nvme_log_disc_desc(disc)) },
+                implemented: unsafe { nvme_log_disc_impl(disc) },
+                scopes: LogPageScopes::from_raw(unsafe {
+                    nvme_log_disc_scopes(disc)
+                }),
+            })),
+            NVME_ITER_DONE => Ok(None),
+            NVME_ITER_ERROR => Err(self
+                .controller
+                .fatal_context("failed to iterate nvme log pages")),
+            invalid => {
+                unreachable!("invalid nvme log iteration state ({invalid})")
+            }
+        }
+    }
+}
+
+impl<'a> Iterator for LogPageDiscovery<'a> {
+    type Item = Result<DiscoveredLogPage, NvmeControllerError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.internal_step().transpose()
+    }
+}
+
+impl<'a> Controller<'a> {
+    /// Discover the controller's log pages, as `nvmeadm list-logpages` does:
+    /// controller and NVM subsystem scoped pages. Use
+    /// [`DiscoveredLogPage::implemented`] to find the ones the controller
+    /// supports.
+    pub fn log_page_discovery(
+        &self,
+    ) -> Result<LogPageDiscovery<'_>, NvmeControllerError> {
+        LogPageDiscovery::new(self, NVME_LOG_SCOPE_CTRL | NVME_LOG_SCOPE_NVM)
+    }
+
+    /// The log pages from [`Controller::log_page_discovery`] that the
+    /// controller implements.
+    pub fn implemented_log_pages(
+        &self,
+    ) -> Result<Vec<DiscoveredLogPage>, NvmeControllerError> {
+        let mut pages = Vec::new();
+        for disc in self.log_page_discovery()? {
+            let disc = disc?;
+            if disc.implemented {
+                pages.push(disc);
+            }
+        }
+        Ok(pages)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scopes_from_raw() {
+        assert_eq!(
+            LogPageScopes::from_raw(NVME_LOG_SCOPE_CTRL | NVME_LOG_SCOPE_NS),
+            LogPageScopes {
+                controller: true,
+                nvm_subsystem: false,
+                namespace: true,
+            }
+        );
+        assert_eq!(
+            LogPageScopes::from_raw(NVME_LOG_SCOPE_NVM),
+            LogPageScopes {
+                controller: false,
+                nvm_subsystem: true,
+                namespace: false,
+            }
+        );
+    }
+}

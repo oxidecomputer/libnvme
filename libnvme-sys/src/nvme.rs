@@ -5,6 +5,7 @@
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
 use super::devinfo::di_node;
+use super::identify::nvme_uint128_t;
 use super::opaque_type;
 
 pub const NVME_ERR_OK: nvme_err_t = 0;
@@ -142,6 +143,11 @@ pub const NVME_LOG_SIZE_K_FIXED: nvme_log_size_kind_t = 1;
 pub const NVME_LOG_SIZE_K_VAR: nvme_log_size_kind_t = 2;
 pub type nvme_log_size_kind_t = c_uint;
 
+pub const NVME_LOG_SCOPE_CTRL: nvme_log_disc_scope_t = 1 << 0;
+pub const NVME_LOG_SCOPE_NVM: nvme_log_disc_scope_t = 1 << 1;
+pub const NVME_LOG_SCOPE_NS: nvme_log_disc_scope_t = 1 << 2;
+pub type nvme_log_disc_scope_t = c_uint;
+
 // TODO: These come from nvme.h and should probably be pulled out into a NVMe
 //  spec crate at some point.
 pub const NVME_FWC_SAVE: u32 = 0;
@@ -153,12 +159,97 @@ const NVME_FWVER_SZ: usize = 8;
 
 #[repr(C)]
 #[derive(Debug)]
+#[cfg_attr(feature = "zerocopy", derive(zerocopy::FromBytes))]
 pub struct nvme_fwslot_log_t {
     pub fw_afi_next_bits: u8,
     pub fw_rsvd3: [u8; 7],
     pub fw_frs: [[c_char; NVME_FWVER_SZ]; 7],
     pub fw_rsvd4: [u8; 512 - 64],
 }
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct nvme_version_t {
+    pub v_minor: u16,
+    pub v_major: u16,
+}
+
+/// SMART / Health information log page.
+#[repr(C, packed)]
+#[derive(Debug)]
+#[cfg_attr(feature = "zerocopy", derive(zerocopy::FromBytes))]
+pub struct nvme_health_log_t {
+    pub hl_crit_warn: u8,
+    pub hl_temp: u16,
+    pub hl_avail_spare: u8,
+    pub hl_avail_spare_thr: u8,
+    pub hl_used: u8,
+    pub hl_ecgcws: u8,
+    pub hl_rsvd1: [u8; 32 - 7],
+    pub hl_data_read: nvme_uint128_t,
+    pub hl_data_write: nvme_uint128_t,
+    pub hl_host_read: nvme_uint128_t,
+    pub hl_host_write: nvme_uint128_t,
+    pub hl_ctrl_busy: nvme_uint128_t,
+    pub hl_power_cycles: nvme_uint128_t,
+    pub hl_power_on_hours: nvme_uint128_t,
+    pub hl_unsafe_shutdn: nvme_uint128_t,
+    pub hl_media_errors: nvme_uint128_t,
+    pub hl_errors_logged: nvme_uint128_t,
+    // Added in NVMe 1.2
+    pub hl_warn_temp_time: u32,
+    pub hl_crit_temp_time: u32,
+    pub hl_temp_sensor_1: u16,
+    pub hl_temp_sensor_2: u16,
+    pub hl_temp_sensor_3: u16,
+    pub hl_temp_sensor_4: u16,
+    pub hl_temp_sensor_5: u16,
+    pub hl_temp_sensor_6: u16,
+    pub hl_temp_sensor_7: u16,
+    pub hl_temp_sensor_8: u16,
+    // Added in NVMe 1.3
+    pub hl_tmtemp_1_tc: u32,
+    pub hl_tmtemp_2_tc: u32,
+    pub hl_tmtemp_1_time: u32,
+    pub hl_tmtemp_2_time: u32,
+    // Added in NVMe 2.3
+    pub hl_olec: u64,
+    pub hl_ipm: u32,
+    pub hl_rsvd2: [u8; 512 - 244],
+}
+
+const _: () = assert!(std::mem::size_of::<nvme_health_log_t>() == 512);
+
+/// WDC SN840 EOL log page (`wdc/eol`), from `sys/nvme/wdc_sn840.h`.
+#[repr(C, packed)]
+#[derive(Debug, Copy, Clone)]
+#[cfg_attr(
+    feature = "zerocopy",
+    derive(
+        zerocopy::FromBytes,
+        zerocopy::KnownLayout,
+        zerocopy::Immutable,
+        zerocopy::Unaligned
+    )
+)]
+pub struct wdc_vul_sn840_eol_t {
+    pub eol_rsvd0: [u8; 76],
+    pub eol_rbc: u32,
+    pub eol_rsvd1: [u8; 4],
+    pub eol_waf: u32,
+    pub eol_plr: u32,
+    pub eol_rsvd2: [u8; 4],
+    pub eol_pfc: u32,
+    pub eol_efc: u32,
+    pub eol_rss3: [u8; 4],
+    pub eol_vendor: u32,
+    pub eol_cust_sts: u16,
+    pub eol_sys_sts: u16,
+    pub eol_cust_state: u8,
+    pub eol_sys_state: u8,
+}
+
+const _: () = assert!(std::mem::size_of::<wdc_vul_sn840_eol_t>() == 118);
 
 opaque_type!(nvme, nvme_t);
 opaque_type!(nvme_ctrl_iter, nvme_ctrl_iter_t);
@@ -171,6 +262,7 @@ opaque_type!(nvme_ns, nvme_ns_t);
 opaque_type!(nvme_ns_info, nvme_ns_info_t);
 opaque_type!(nvme_nvm_lba_fmt, nvme_nvm_lba_fmt_t);
 opaque_type!(nvme_format_req, nvme_format_req_t);
+opaque_type!(nvme_log_iter, nvme_log_iter_t);
 opaque_type!(nvme_log_disc, nvme_log_disc_t);
 opaque_type!(nvme_log_req, nvme_log_req_t);
 opaque_type!(nvme_fw_commit_req, nvme_fw_commit_req_t);
@@ -242,6 +334,9 @@ extern "C" {
     pub fn nvme_ctrl_info_model(ci: *mut nvme_ctrl_info_t) -> *const c_char;
     pub fn nvme_ctrl_info_serial(ci: *mut nvme_ctrl_info_t) -> *const c_char;
     pub fn nvme_ctrl_info_fwrev(ci: *mut nvme_ctrl_info_t) -> *const c_char;
+    pub fn nvme_ctrl_info_version(
+        ci: *mut nvme_ctrl_info_t,
+    ) -> *const nvme_version_t;
     pub fn nvme_ctrl_info_nns(ci: *mut nvme_ctrl_info_t) -> u32;
     pub fn nvme_ctrl_info_pci_vid(
         ci: *mut nvme_ctrl_info_t,
@@ -288,6 +383,10 @@ extern "C" {
     pub fn nvme_ns_info_err(info: *mut nvme_ns_info_t) -> nvme_info_err_t;
     pub fn nvme_ns_info_errmsg(info: *mut nvme_ns_info_t) -> *const c_char;
     pub fn nvme_ns_info_syserr(info: *mut nvme_ns_info_t) -> c_int;
+    pub fn nvme_ns_info_size(
+        info: *mut nvme_ns_info_t,
+        sizep: *mut u64,
+    ) -> bool;
     pub fn nvme_ns_info_curformat(
         info: *mut nvme_ns_info_t,
         fmtp: *mut *const nvme_nvm_lba_fmt,
@@ -306,6 +405,23 @@ extern "C" {
     pub fn nvme_ns_bd_detach(ns: *mut nvme_ns_t) -> bool;
 
     // NVMe Log Page Discovery
+    pub fn nvme_log_disc_name(disc: *const nvme_log_disc_t) -> *const c_char;
+    pub fn nvme_log_disc_desc(disc: *const nvme_log_disc_t) -> *const c_char;
+    pub fn nvme_log_disc_scopes(
+        disc: *const nvme_log_disc_t,
+    ) -> nvme_log_disc_scope_t;
+    pub fn nvme_log_disc_impl(disc: *const nvme_log_disc_t) -> bool;
+    pub fn nvme_log_discover_init(
+        ctrl: *mut nvme_ctrl_t,
+        scope: nvme_log_disc_scope_t,
+        flags: u32,
+        iterp: *mut *mut nvme_log_iter_t,
+    ) -> bool;
+    pub fn nvme_log_discover_step(
+        iter: *mut nvme_log_iter_t,
+        discp: *mut *const nvme_log_disc_t,
+    ) -> nvme_iter_t;
+    pub fn nvme_log_discover_fini(iter: *mut nvme_log_iter_t);
     pub fn nvme_log_req_init_by_name(
         ctrl: *mut nvme_ctrl_t,
         name: *const c_char,
