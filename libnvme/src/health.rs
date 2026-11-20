@@ -143,20 +143,12 @@ pub struct HealthLogPage {
     /// the controller's NVMe version is before 1.2, or it reports no critical
     /// threshold.
     pub critical_temperature_minutes: Option<u32>,
-    /// The implemented temperature sensors. Empty if the controller's NVMe
-    /// version is before 1.2.
-    pub temperature_sensors: Vec<TemperatureSensor>,
+    /// Temperature sensors 1 through 8, in order. A sensor is `None` if it
+    /// isn't implemented, or the controller's NVMe version is before 1.2.
+    pub temperature_sensors: [Option<Temperature>; 8],
     /// Thermal management statistics. `None` if the controller's NVMe
     /// version is before 1.3.
     pub thermal_management: Option<ThermalManagement>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TemperatureSensor {
-    /// Sensor number, 1 through 8.
-    pub sensor: u8,
-    pub temperature: Temperature,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -265,17 +257,9 @@ impl HealthLogPage {
             critical_temperature_minutes: (v1_2 && ctx.cctemp.is_some())
                 .then_some(logpage.hl_crit_temp_time),
             temperature_sensors: if v1_2 {
-                (1u8..)
-                    .zip(sensors)
-                    .filter_map(|(sensor, k)| {
-                        Some(TemperatureSensor {
-                            sensor,
-                            temperature: Temperature::from_kelvin(k)?,
-                        })
-                    })
-                    .collect()
+                sensors.map(Temperature::from_kelvin)
             } else {
-                Vec::new()
+                [None; 8]
             },
             thermal_management: ctx.at_least(1, 3).then_some(
                 ThermalManagement {
@@ -378,12 +362,11 @@ mod tests {
         assert_eq!(h.data_read_bytes, 27_300 * 512_000);
         assert_eq!(h.data_written_bytes, 33_600 * 512_000);
         assert_eq!(h.power_on_hours, 234);
-        let sensors: Vec<(u8, i32)> = h
-            .temperature_sensors
-            .iter()
-            .map(|s| (s.sensor, s.temperature.celsius()))
-            .collect();
-        assert_eq!(sensors, [(1, 61), (2, 53), (3, 43)]);
+        let sensors = h.temperature_sensors.map(|t| t.map(|t| t.celsius()));
+        assert_eq!(
+            sensors,
+            [Some(61), Some(53), Some(43), None, None, None, None, None]
+        );
         assert_eq!(h.warning_temperature_minutes, Some(0));
         assert!(h.thermal_management.is_some());
         // No volatile write cache, so no volatile memory backup warning.
@@ -453,13 +436,13 @@ mod tests {
             None
         );
         assert_eq!(h.endurance_group_warnings, None);
-        assert!(h.temperature_sensors.is_empty());
+        assert_eq!(h.temperature_sensors, [None; 8]);
         assert_eq!(h.warning_temperature_minutes, None);
         assert!(h.thermal_management.is_none());
 
         let ctx = HealthContext { version: version(1, 2), wctemp: None, ..CTX };
         let h = HealthLogPage::init(micron_sample(), &ctx);
-        assert_eq!(h.temperature_sensors.len(), 3);
+        assert_eq!(h.temperature_sensors.iter().flatten().count(), 3);
         assert_eq!(h.warning_temperature_minutes, None);
         assert_eq!(h.critical_temperature_minutes, Some(0));
         assert!(h.thermal_management.is_none());
