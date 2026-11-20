@@ -4,7 +4,10 @@
 
 #![deny(warnings)]
 
-use std::{env, path::PathBuf};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 extern crate libnvme_sys;
 
@@ -81,6 +84,36 @@ const PSD_BITFIELDS: &[&str] = &[
     "psd_mbws_bits",
 ];
 
+/// Copy the NVMe headers out of an illumos-gate checkout into `dest`, laid out
+/// as they are installed.
+///
+/// `dest` can then go ahead of /usr/include, so that every NVMe header comes
+/// from the one revision of the gate while every other header is the
+/// system's.
+fn copy_nvme_headers(gate: &Path, dest: &Path) {
+    let copy = |from: PathBuf, to: PathBuf| {
+        fs::copy(&from, &to).unwrap_or_else(|e| {
+            panic!("failed to copy {}: {e}", from.display())
+        });
+    };
+    let sys = gate.join("usr/src/uts/common/sys");
+
+    let _ = fs::remove_dir_all(dest);
+    fs::create_dir_all(dest.join("sys/nvme")).unwrap();
+    copy(
+        gate.join("usr/src/lib/libnvme/common/libnvme.h"),
+        dest.join("libnvme.h"),
+    );
+    copy(sys.join("nvme.h"), dest.join("sys/nvme.h"));
+    let vendor = sys.join("nvme");
+    let entries = fs::read_dir(&vendor)
+        .unwrap_or_else(|e| panic!("failed to read {}: {e}", vendor.display()));
+    for entry in entries {
+        let entry = entry.unwrap();
+        copy(entry.path(), dest.join("sys/nvme").join(entry.file_name()));
+    }
+}
+
 fn main() {
     // This is a bit of a hack, but we want this to always rerun as the users
     // GATE_SRC checkout may have changed.
@@ -97,12 +130,10 @@ fn main() {
         }
     };
 
-    // We need access to sys/nvme.h which is not shipped in /usr/include
-    let include_paths = ["usr/src/uts/common"];
+    let headers = PathBuf::from(env::var("OUT_DIR").unwrap()).join("include");
+    copy_nvme_headers(&gate_dir, &headers);
+    cfg.include(&headers);
     cfg.include("/usr/include");
-    for p in include_paths {
-        cfg.include(gate_dir.join(p));
-    }
 
     cfg.header("libnvme.h");
 

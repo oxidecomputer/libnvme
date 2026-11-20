@@ -1,0 +1,3 @@
+# The commit of illumos-gate's stlouis branch that header-check verifies the
+# bindings against. See "Header checks" in the README.
+COMMIT="0714ca89f4455b41ea062e7a12b0ae6175d57380"
