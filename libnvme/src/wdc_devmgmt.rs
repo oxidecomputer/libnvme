@@ -111,8 +111,10 @@ pub struct DevMgmtLog {
     pub vca_tpc_rst_seq: Option<u32>,
     /// 0x23
     pub vca_tpc_fss_seq: Option<u32>,
-    /// Entries with identifiers illumos doesn't define, in log order,
-    /// skipping unset customer identifiers.
+    /// Entries that weren't decoded into a field above, in log order,
+    /// skipping unset customer identifiers: those with identifiers illumos
+    /// doesn't define, and those whose data doesn't fit the type the SN840
+    /// uses for their identifier.
     pub unknown: Vec<UnknownEntry>,
 }
 
@@ -142,7 +144,9 @@ impl From<u32> for ThermalThrottleStatus {
     }
 }
 
-/// An entry with an unknown identifier.
+/// An entry that wasn't decoded into a field of [`DevMgmtLog`]: one with an
+/// unknown identifier, or with a known identifier but data that doesn't fit
+/// the type the SN840 uses for it, as another device might report.
 ///
 /// In practice SN840s report four (0x24 through 0x27), each containing the
 /// string "CUSTOMER_ID_GENERIC". These appear to be unset customer
@@ -212,8 +216,14 @@ fn u32_at(b: &[u8], off: usize) -> Option<u32> {
     Some(u32::from_le_bytes(b.get(off..off + 4)?.try_into().ok()?))
 }
 
-fn u64_at(b: &[u8], off: usize) -> Option<u64> {
-    Some(u64::from_le_bytes(b.get(off..off + 8)?.try_into().ok()?))
+/// The value of a `uint32_t` entry, whose data must be exactly that.
+fn u32_value(data: &[u8]) -> Option<u32> {
+    Some(u32::from_le_bytes(data.try_into().ok()?))
+}
+
+/// The value of a `uint64_t` entry, whose data must be exactly that.
+fn u64_value(data: &[u8]) -> Option<u64> {
+    Some(u64::from_le_bytes(data.try_into().ok()?))
 }
 
 /// The contents of a WDC counted byte string (`wdc_cbs_t`): a `u32` length
@@ -263,72 +273,78 @@ impl DevMgmtLog {
                 .checked_add(len)
                 .filter(|&next| next <= end)
                 .ok_or_else(|| malformed(off, "entry extends past the log"))?;
-            if !log.set(id, &buf[off + VSD_HDR_LEN..next]) {
-                return Err(malformed(off, "entry too short for its type"));
-            }
+            log.set(id, &buf[off + VSD_HDR_LEN..next]);
             off = next;
         }
 
         Ok(log)
     }
 
-    /// Store an entry's value in its field, or in `unknown`. Returns false if
-    /// the data is too short for the entry's type.
-    fn set(&mut self, id: u32, data: &[u8]) -> bool {
+    /// Store an entry's value in its field, or in `unknown` if its
+    /// identifier is unknown or its data doesn't fit the identifier's type.
+    ///
+    /// A mismatched entry isn't an error: the rest of the log is still
+    /// worth having, and a device other than the SN840 may use a different
+    /// type for an identifier.
+    fn set(&mut self, id: u32, data: &[u8]) {
+        /// Returns false, leaving the field alone, if there is no value.
         fn put<T>(field: &mut Option<T>, value: Option<T>) -> bool {
-            *field = value;
-            field.is_some()
+            let decoded = value.is_some();
+            if decoded {
+                *field = value;
+            }
+            decoded
         }
         let bytes = |data| cbs(data).map(<[u8]>::to_vec);
-        match id {
-            0x01 => put(&mut self.id, u32_at(data, 0)),
+        let decoded = match id {
+            0x01 => put(&mut self.id, u32_value(data)),
             0x02 => put(&mut self.uefi_ver, cbs_str(data)),
             0x03 => put(&mut self.sbl_ver, cbs_str(data)),
-            0x04 => put(&mut self.def_user_cap, u64_at(data, 0)),
-            0x05 => put(&mut self.max_user_cap, u64_at(data, 0)),
-            0x06 => put(&mut self.min_user_cap, u64_at(data, 0)),
+            0x04 => put(&mut self.def_user_cap, u64_value(data)),
+            0x05 => put(&mut self.max_user_cap, u64_value(data)),
+            0x06 => put(&mut self.min_user_cap, u64_value(data)),
             0x07 => put(&mut self.name, cbs_str(data)),
             0x08 => put(&mut self.log_sup, bytes(data)),
             0x09 => put(&mut self.feat_sup, bytes(data)),
-            0x0a => put(&mut self.form_factor, u32_at(data, 0)),
-            0x0b => put(&mut self.resize_gran, u64_at(data, 0)),
-            0x0c => put(&mut self.ns_alloc_size, u64_at(data, 0)),
-            0x0d => put(&mut self.ns_reg_avail, u64_at(data, 0)),
-            0x0e => put(&mut self.raw_nvm, u64_at(data, 0)),
-            0x0f => put(&mut self.port_cfg_sts, u32_at(data, 0)),
+            0x0a => put(&mut self.form_factor, u32_value(data)),
+            0x0b => put(&mut self.resize_gran, u64_value(data)),
+            0x0c => put(&mut self.ns_alloc_size, u64_value(data)),
+            0x0d => put(&mut self.ns_reg_avail, u64_value(data)),
+            0x0e => put(&mut self.raw_nvm, u64_value(data)),
+            0x0f => put(&mut self.port_cfg_sts, u32_value(data)),
             0x10 => put(&mut self.mpn, cbs_str(data)),
             0x11 => put(&mut self.sn, cbs_str(data)),
-            0x12 => put(&mut self.def_ns_attrs, u32_at(data, 0)),
+            0x12 => put(&mut self.def_ns_attrs, u32_value(data)),
             0x13 => put(&mut self.git_descr, cbs_str(data)),
             0x14 => put(&mut self.smb_bl, cbs_str(data)),
-            0x15 => put(&mut self.cust_id, u32_at(data, 0)),
+            0x15 => put(&mut self.cust_id, u32_value(data)),
             0x16 => put(&mut self.prod_desc, cbs_str(data)),
             0x17 => put(&mut self.tmm_ver, cbs_str(data)),
             0x18 => {
-                put(&mut self.therm_throt_sts, u32_at(data, 0).map(Into::into))
+                put(&mut self.therm_throt_sts, u32_value(data).map(Into::into))
             }
-            0x19 => put(&mut self.assert_dump, u32_at(data, 0)),
-            0x1a => put(&mut self.cust_eol_sts, u32_at(data, 0)),
-            0x1b => put(&mut self.ifs_eol_sts, u32_at(data, 0)),
+            0x19 => put(&mut self.assert_dump, u32_value(data)),
+            0x1a => put(&mut self.cust_eol_sts, u32_value(data)),
+            0x1b => put(&mut self.ifs_eol_sts, u32_value(data)),
             0x1c => {
-                put(&mut self.cust_eol_state, u32_at(data, 0).map(Into::into))
+                put(&mut self.cust_eol_state, u32_value(data).map(Into::into))
             }
             0x1d => {
-                put(&mut self.ifs_eol_state, u32_at(data, 0).map(Into::into))
+                put(&mut self.ifs_eol_state, u32_value(data).map(Into::into))
             }
-            0x1e => put(&mut self.fcr, u32_at(data, 0)),
-            0x1f => put(&mut self.vca_bpc_rev, u32_at(data, 0)),
-            0x20 => put(&mut self.vca_bpc_min_rev, u32_at(data, 0)),
-            0x21 => put(&mut self.vca_bpc_rst_seq, u32_at(data, 0)),
-            0x22 => put(&mut self.vca_tpc_rst_seq, u32_at(data, 0)),
-            0x23 => put(&mut self.vca_tpc_fss_seq, u32_at(data, 0)),
-            _ => {
-                let value = UnknownValue::decode(data);
-                if !matches!(&value, UnknownValue::Text(t) if t == UNSET_CUSTOMER_ID)
-                {
-                    self.unknown.push(UnknownEntry { id, value });
-                }
-                true
+            0x1e => put(&mut self.fcr, u32_value(data)),
+            0x1f => put(&mut self.vca_bpc_rev, u32_value(data)),
+            0x20 => put(&mut self.vca_bpc_min_rev, u32_value(data)),
+            0x21 => put(&mut self.vca_bpc_rst_seq, u32_value(data)),
+            0x22 => put(&mut self.vca_tpc_rst_seq, u32_value(data)),
+            0x23 => put(&mut self.vca_tpc_fss_seq, u32_value(data)),
+            _ => false,
+        };
+        if !decoded {
+            let value = UnknownValue::decode(data);
+            if !matches!(&value, UnknownValue::Text(t) if t == UNSET_CUSTOMER_ID)
+            {
+                self.unknown.push(UnknownEntry { id, value });
             }
         }
     }
@@ -458,6 +474,50 @@ mod tests {
                 value: UnknownValue::Text("ACME".into())
             }]
         );
+    }
+
+    #[test]
+    fn mismatched_entries_are_kept_as_unknown() {
+        // Log header, then: def_user_cap (a u64) with 4 bytes of data, id (a
+        // u32) with 8, name (a counted byte string) whose count runs past
+        // its data, and a well-formed assert_dump.
+        let mut buf = Vec::new();
+        for word in
+            [64u32, 0, 12, 0x04, 7, 16, 0x01, 1, 2, 16, 0x07, 9, 0, 12, 0x19, 1]
+        {
+            buf.extend_from_slice(&word.to_le_bytes());
+        }
+        let log = DevMgmtLog::parse(&buf).unwrap();
+        assert_eq!(log.def_user_cap, None);
+        assert_eq!(log.id, None);
+        assert_eq!(log.name, None);
+        assert_eq!(log.assert_dump, Some(1));
+        let bytes = |words: &[u32]| {
+            UnknownValue::Bytes(
+                words.iter().flat_map(|w| w.to_le_bytes()).collect(),
+            )
+        };
+        assert_eq!(
+            log.unknown,
+            [
+                UnknownEntry { id: 0x04, value: bytes(&[7]) },
+                UnknownEntry { id: 0x01, value: bytes(&[1, 2]) },
+                UnknownEntry { id: 0x07, value: bytes(&[9, 0]) },
+            ]
+        );
+    }
+
+    #[test]
+    fn mismatched_entry_keeps_earlier_value() {
+        // Log header plus two assert_dump entries: a u32, then one with 8
+        // bytes of data.
+        let mut buf = Vec::new();
+        for word in [36u32, 0, 12, 0x19, 1, 16, 0x19, 0, 0] {
+            buf.extend_from_slice(&word.to_le_bytes());
+        }
+        let log = DevMgmtLog::parse(&buf).unwrap();
+        assert_eq!(log.assert_dump, Some(1));
+        assert_eq!(log.unknown.len(), 1);
     }
 
     #[test]
