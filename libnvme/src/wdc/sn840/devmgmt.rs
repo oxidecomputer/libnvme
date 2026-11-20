@@ -5,11 +5,8 @@
 //! The WDC Device Manageability log page (`wdc/devmgmt`, log identifier
 //! c2h), supported by the Ultrastar DC SN840.
 //!
-//! The log is a sequence of variable length entries (`wdc_vsd_t` in illumos
-//! `sys/nvme/wdc.h`), each a little-endian `u32` length that includes the
-//! 8-byte entry header, a `u32` identifier, and data. The first entry is the
-//! log header: its length is that of the whole log and its identifier is the
-//! log version. Identifiers and their types come from `wdc_sn840_vsd_id_t` in
+//! The log is a sequence of identified entries, in a format WDC devices
+//! share. Identifiers and their types come from `wdc_sn840_vsd_id_t` in
 //! `sys/nvme/wdc_sn840.h`, whose names the fields below use.
 
 use thiserror::Error;
@@ -17,16 +14,16 @@ use thiserror::Error;
 use crate::{
     controller::{Controller, NvmeControllerError},
     logpage::{LogPageBytesError, LogPageName},
-    wdc::sn840::EolState,
+    wdc::{
+        devmgmt::{self, cbs},
+        sn840::EolState,
+    },
 };
 
 /// The text an unset customer identifier entry holds. Some SN840 firmware
 /// reports four of these (0x24 through 0x27), which neither illumos nor
 /// nvme-cli interprets.
 const UNSET_CUSTOMER_ID: &str = "CUSTOMER_ID_GENERIC";
-
-/// Size of an entry header (and of the log header).
-const VSD_HDR_LEN: usize = 8;
 
 /// The decoded Device Manageability log page. A field is `None` if the drive
 /// didn't report that entry; if it reported one more than once, the last
@@ -209,10 +206,6 @@ pub enum DevMgmtError {
     TooLarge { size: usize, max: usize },
 }
 
-fn u32_at(b: &[u8], off: usize) -> Option<u32> {
-    Some(u32::from_le_bytes(b.get(off..off + 4)?.try_into().ok()?))
-}
-
 /// The value of a `uint32_t` entry, whose data must be exactly that.
 fn u32_value(data: &[u8]) -> Option<u32> {
     Some(u32::from_le_bytes(data.try_into().ok()?))
@@ -223,13 +216,6 @@ fn u64_value(data: &[u8]) -> Option<u64> {
     Some(u64::from_le_bytes(data.try_into().ok()?))
 }
 
-/// The contents of a WDC counted byte string (`wdc_cbs_t`): a `u32` length
-/// followed by that many bytes and any padding.
-fn cbs(data: &[u8]) -> Option<&[u8]> {
-    let len = usize::try_from(u32_at(data, 0)?).ok()?;
-    data.get(4..4usize.checked_add(len)?)
-}
-
 fn cbs_str(data: &[u8]) -> Option<String> {
     Some(String::from_utf8_lossy(cbs(data)?).trim_end_matches('\0').to_string())
 }
@@ -238,43 +224,20 @@ impl DevMgmtLog {
     /// Decode a raw Device Manageability log page. It is an error for an
     /// entry's data not to fit its identifier's type.
     pub fn parse(buf: &[u8]) -> Result<Self, DevMgmtError> {
-        let malformed =
-            |offset, reason| DevMgmtError::Malformed { offset, reason };
-
-        let (Some(total), Some(version)) = (u32_at(buf, 0), u32_at(buf, 4))
-        else {
-            return Err(malformed(0, "truncated log header"));
+        let malformed = |devmgmt::Malformed { offset, reason }| {
+            DevMgmtError::Malformed { offset, reason }
         };
-        let end = usize::try_from(total)
-            .map_err(|_| malformed(0, "log length too large"))?;
-        if end < VSD_HDR_LEN {
-            return Err(malformed(0, "log length shorter than its header"));
-        }
-        if end > buf.len() {
-            return Err(malformed(0, "log length exceeds the data read"));
-        }
 
+        let (version, entries) = devmgmt::entries(buf).map_err(malformed)?;
         let mut log = DevMgmtLog { version, ..Default::default() };
-        let mut off = VSD_HDR_LEN;
-        while off < end {
-            let (Some(len), Some(id)) =
-                (u32_at(&buf[..end], off), u32_at(&buf[..end], off + 4))
-            else {
-                return Err(malformed(off, "truncated entry header"));
-            };
-            let len = usize::try_from(len)
-                .map_err(|_| malformed(off, "entry length too large"))?;
-            if len < VSD_HDR_LEN {
-                return Err(malformed(off, "entry shorter than its header"));
+        for entry in entries {
+            let entry = entry.map_err(malformed)?;
+            if !log.set(entry.id, entry.data) {
+                return Err(DevMgmtError::Malformed {
+                    offset: entry.offset,
+                    reason: "entry data doesn't fit its type",
+                });
             }
-            let next = off
-                .checked_add(len)
-                .filter(|&next| next <= end)
-                .ok_or_else(|| malformed(off, "entry extends past the log"))?;
-            if !log.set(id, &buf[off + VSD_HDR_LEN..next]) {
-                return Err(malformed(off, "entry data doesn't fit its type"));
-            }
-            off = next;
         }
 
         Ok(log)

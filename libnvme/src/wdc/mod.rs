@@ -5,6 +5,7 @@
 //! WDC devices. What they have in common is here; what is specific to one
 //! device is in a module named for it.
 
+mod devmgmt;
 pub mod sn840;
 
 use std::ops::Deref;
