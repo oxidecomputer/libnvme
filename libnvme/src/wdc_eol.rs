@@ -23,15 +23,16 @@ use crate::{
 /// Size of `wdc_vul_sn840_eol_t`.
 const EOL_LOG_LEN: usize = mem::size_of::<wdc_vul_sn840_eol_t>();
 
-/// The decoded EOL log page. Field names follow nvmeadm's descriptions; the
-/// illumos field name is given for each.
+/// The decoded EOL log page of an SN840. Field names follow nvmeadm's
+/// descriptions; the illumos field name is given for each.
 ///
-/// The layout is the SN840's. This is non-exhaustive so that fields can be
-/// added.
+/// The page is a structure of fixed offsets, so this is named for the one
+/// device whose layout it decodes. It is non-exhaustive so that fields can
+/// be added.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
-pub struct EolLog {
+pub struct Sn840EolLog {
     /// Reallocated block count (`eol_rbc`).
     pub reallocated_block_count: u32,
     /// Write amplification factor (`eol_waf`).
@@ -97,7 +98,7 @@ impl From<u32> for EolState {
 }
 
 #[derive(Debug, Error)]
-pub enum EolError {
+pub enum Sn840EolError {
     #[error(transparent)]
     ControllerError(#[from] NvmeControllerError),
     #[error("EOL log is {len} bytes, shorter than the {EOL_LOG_LEN} expected")]
@@ -106,13 +107,13 @@ pub enum EolError {
     TooLarge { size: usize, max: usize },
 }
 
-impl EolLog {
+impl Sn840EolLog {
     /// Decode a raw EOL log page.
-    pub fn parse(buf: &[u8]) -> Result<Self, EolError> {
+    pub fn parse(buf: &[u8]) -> Result<Self, Sn840EolError> {
         let Ok((eol, _)) = wdc_vul_sn840_eol_t::read_from_prefix(buf) else {
-            return Err(EolError::TooShort { len: buf.len() });
+            return Err(Sn840EolError::TooShort { len: buf.len() });
         };
-        Ok(EolLog {
+        Ok(Sn840EolLog {
             reallocated_block_count: eol.eol_rbc,
             write_amplification_factor: eol.eol_waf,
             // Defined as unsigned, but SN840s report a signed value once past
@@ -130,19 +131,23 @@ impl EolLog {
 }
 
 impl<'a> Controller<'a> {
-    /// Get the controller's WDC EOL log page. Only controllers that list
-    /// `wdc/eol` in [`Controller::log_page_discovery`] support it.
-    pub fn get_wdc_eol_log_page(&self) -> Result<EolLog, EolError> {
+    /// Get the controller's WDC EOL log page, decoded with the SN840's
+    /// layout. Only controllers that list `wdc/eol` in
+    /// [`Controller::log_page_discovery`] support it; illumos defines that
+    /// log page for the SN840 alone.
+    pub fn get_wdc_sn840_eol_log_page(
+        &self,
+    ) -> Result<Sn840EolLog, Sn840EolError> {
         let buf =
             self.get_logpage_bytes(LogPageName::WdcEol).map_err(
                 |e| match e {
                     LogPageBytesError::Controller(e) => e.into(),
                     LogPageBytesError::TooLarge { size, max } => {
-                        EolError::TooLarge { size, max }
+                        Sn840EolError::TooLarge { size, max }
                     }
                 },
             )?;
-        EolLog::parse(&buf)
+        Sn840EolLog::parse(&buf)
     }
 }
 
@@ -167,10 +172,10 @@ mod tests {
 
     #[test]
     fn parses_sn840_log() {
-        let log = EolLog::parse(NVME11).unwrap();
+        let log = Sn840EolLog::parse(NVME11).unwrap();
         assert_eq!(
             log,
-            EolLog {
+            Sn840EolLog {
                 reallocated_block_count: 0x328c,
                 write_amplification_factor: 0x67,
                 percentage_life_remaining: -57,
@@ -197,10 +202,10 @@ mod tests {
     #[test]
     fn rejects_short_log() {
         assert!(matches!(
-            EolLog::parse(&NVME11[..117]),
-            Err(EolError::TooShort { len: 117 })
+            Sn840EolLog::parse(&NVME11[..117]),
+            Err(Sn840EolError::TooShort { len: 117 })
         ));
         // The unpadded structure is enough.
-        assert!(EolLog::parse(&NVME11[..EOL_LOG_LEN]).is_ok());
+        assert!(Sn840EolLog::parse(&NVME11[..EOL_LOG_LEN]).is_ok());
     }
 }
